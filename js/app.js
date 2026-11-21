@@ -6,7 +6,7 @@ import { tts } from './audio/tts.js';
 
 const LEVELS = [1, 2, 3, 4, 5, 6, 7];
 const levelLabel = (l) => (l === 7 ? 'HSK 7-9' : `HSK ${l}`);
-const AVATARS = ['🐉', '🐼', '🐯', '🦊', '🦁', '🐰', '🦅', '🦄'];
+const AVATARS = ['🐼', '🐉', '🐯', '🦊', '🦁', '🐰', '🦅', '🦄'];
 
 let aiEnabled = false;
 let currentTab = 'home';
@@ -46,17 +46,14 @@ function closeModal() {
   document.getElementById('modal-backdrop').classList.add('hidden');
 }
 
-// ==========================================
-// 1. HỆ THỐNG ĐĂNG NHẬP & ĐĂNG KÝ NHIỀU NGƯỜI DÙNG
-// ==========================================
 function openAuthModal(defaultMode = 'login') {
   const accounts = store.accounts || [];
-  let selectedAvatar = '🐉';
+  let selectedAvatar = '🐼';
 
   const renderAuth = (mode) => {
     openModal(`
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-right:32px">
-        <h3 class="card-title" style="margin:0">👤 Tài Khoản Học Viên (${accounts.length}/10 chỗ)</h3>
+        <h3 class="card-title" style="margin:0">🐼 Tài Khoản Panda (${accounts.length}/10 chỗ)</h3>
         ${store.currentUsername ? `<button class="btn btn-outline btn-sm" id="btn-logout-now">Đăng xuất</button>` : ''}
       </div>
 
@@ -95,7 +92,7 @@ function openAuthModal(defaultMode = 'login') {
           <input type="text" id="auth-user" placeholder="Tên đăng nhập (ví dụ: letieu, minhanh...)" />
           <input type="password" id="auth-pass" placeholder="Mật khẩu..." />
           <div id="auth-err" style="color:#dc2626;font-size:0.82rem;font-weight:600"></div>
-          <button class="btn btn-primary btn-block" id="btn-submit-login">Đăng nhập vào học</button>
+          <button class="btn btn-primary btn-block" id="btn-submit-login">Đăng nhập vào Panda</button>
         </div>
       ` : `
         <div style="display:flex;flex-direction:column;gap:10px">
@@ -181,21 +178,18 @@ function openAuthModal(defaultMode = 'login') {
   renderAuth(defaultMode);
 }
 
-// ==========================================
-// 2. SƯ PHỤ AI TOÀN DIỆN
-// ==========================================
 function openAITutorModal() {
   openModal(`
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-      <div style="width:40px;height:40px;border-radius:12px;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.3rem">🧙‍♂️</div>
+      <div style="width:40px;height:40px;border-radius:12px;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.3rem">🐼</div>
       <div>
-        <h3 class="card-title" style="margin:0">Sư Phụ AI Tiếng Trung Toàn Diện</h3>
+        <h3 class="card-title" style="margin:0">Sư Phụ AI Panda — Chuyên Gia Tiếng Trung</h3>
         <div style="font-size:0.78rem;color:var(--text-muted)">Từ vựng · Ngữ pháp · Giao tiếp · Dịch thuật · HSK 1–9</div>
       </div>
     </div>
     <div id="ai-chat-box" class="chat-stream">
       <div class="chat-msg ai">
-        <strong>Sư phụ AI:</strong> 你好！(Nǐ hǎo!) Ta có thể giải đáp mọi vấn đề về tiếng Trung — từ giao tiếp thực tế, ngữ pháp, chiết tự chữ Hán, dịch thuật đến luyện thi mọi cấp độ.<br><br>
+        <strong>Sư phụ Panda:</strong> 你好！(Nǐ hǎo!) Ta có thể giải đáp mọi vấn đề về tiếng Trung — từ giao tiếp thực tế, ngữ pháp, chiết tự chữ Hán, dịch thuật đến luyện thi mọi cấp độ.<br><br>
         <strong>Bạn muốn hỏi tôi cái gì?</strong>
       </div>
     </div>
@@ -218,7 +212,7 @@ function openAITutorModal() {
     inp.value = '';
     box.innerHTML += `<div class="chat-msg user">${msg}</div>`;
     const loadingId = 'ai-load-' + Date.now();
-    box.innerHTML += `<div id="${loadingId}" class="chat-msg ai" style="color:var(--text-muted)">⏳ Sư phụ đang phân tích...</div>`;
+    box.innerHTML += `<div id="${loadingId}" class="chat-msg ai" style="color:var(--text-muted)">⏳ Panda AI đang phân tích...</div>`;
     box.scrollTop = box.scrollHeight;
     try {
       const res = await fetch('./api/chat', {
@@ -326,9 +320,6 @@ async function startQuickQuiz(words, title = 'Luyện tập từ vựng', return
   renderQ();
 }
 
-// ==========================================
-// 3. CÁC MÀN HÌNH CHÍNH (HOME, HÀNH TRÌNH BÀI BẢN, SỔ TỪ PHÂN PHẦN)
-// ==========================================
 async function renderView(tab) {
   const main = document.getElementById('main-view');
   const p = store.state.profile;
@@ -338,10 +329,9 @@ async function renderView(tab) {
   const customDecks = store.state.customDecks || [];
 
   if (tab === 'home') {
-    // Xây dựng Bảng xếp hạng kết hợp người dùng thật trên máy + học viên mẫu
     const realPlayers = (store.accounts || []).map((a) => ({
       name: `${a.displayName} (@${a.username})`,
-      avatar: a.avatar || '🐉',
+      avatar: a.avatar || '🐼',
       lv: a.level || 1,
       xp: a.xp || 0,
       isReal: true
@@ -358,7 +348,7 @@ async function renderView(tab) {
         <div class="hero-left">
           <div class="mascot-avatar">${p.avatar || '🐼'}</div>
           <div>
-            <h1 class="hero-title">Xin chào, ${p.name}!</h1>
+            <h1 class="hero-title">Chào mừng đến với Panda, ${p.name}!</h1>
             <p class="hero-sub">Kho từ vựng <strong>${allWords.length.toLocaleString()}</strong> từ (HSK 1–9) · ${store.currentUsername ? 'Đã đồng bộ tiến độ tài khoản' : 'Chế độ Khách (nên đăng ký tài khoản để lưu tiến độ riêng)'}</p>
           </div>
         </div>
@@ -373,7 +363,7 @@ async function renderView(tab) {
         <div style="display:flex;flex-direction:column;gap:16px">
           <div class="card">
             <div class="card-header">
-              <h3 class="card-title">🏆 BẢNG XẾP HẠNG HỌC VIÊN</h3>
+              <h3 class="card-title">🏆 BẢNG XẾP HẠNG PANDA</h3>
               <span class="badge-pill">Tháng 11/2026</span>
             </div>
             <div class="podium-row">
@@ -482,15 +472,12 @@ async function renderView(tab) {
       };
     });
 
-  // ==========================================
-  // 4. HÀNH TRÌNH BÀI BẢN (CHIA CẤP ĐỘ -> CHƯƠNG -> BÀI HỌC 10 TỪ)
-  // ==========================================
   } else if (tab === 'journey') {
     let selectedChapter = 0;
 
     const renderJourney = () => {
       const levelWords = allWords.filter((w) => w.level === p.activeWorld);
-      const chapterSize = 50; // Mỗi chương gồm 50 từ (5 bài học nhỏ, mỗi bài 10 từ)
+      const chapterSize = 50;
       const totalChapters = Math.max(1, Math.ceil(levelWords.length / chapterSize));
       if (selectedChapter >= totalChapters) selectedChapter = 0;
 
@@ -510,7 +497,6 @@ async function renderView(tab) {
         </div>
 
         <div class="two-col-grid">
-          <!-- CỘT TRÁI: DANH SÁCH CHƯƠNG -->
           <div class="card">
             <h3 class="card-title" style="margin-bottom:10px">📚 Danh Sách Chương (${totalChapters} chương)</h3>
             <div style="display:flex;flex-direction:column;gap:6px;max-height:62dvh;overflow-y:auto">
@@ -528,7 +514,6 @@ async function renderView(tab) {
             </div>
           </div>
 
-          <!-- CỘT PHẢI: CÁC BÀI HỌC TRONG CHƯƠNG ĐANG CHỌN -->
           <div class="card">
             <div class="card-header">
               <h3 class="card-title">🏯 Chương ${selectedChapter + 1} · Các Bài Học Chi Tiết</h3>
@@ -606,12 +591,9 @@ async function renderView(tab) {
 
     renderJourney();
 
-  // ==========================================
-  // 5. SỔ TỪ VỰNG CHIA THEO PHẦN (TRẠNG THÁI TRÍ NHỚ + CẤP ĐỘ + PHÂN TRANG)
-  // ==========================================
   } else if (tab === 'practice') {
     let filterLevel = 0;
-    let statusTab = 'all'; // all | unlearned | learning | mastered
+    let statusTab = 'all';
     let page = 1;
     const pageSize = 30;
 
@@ -621,7 +603,6 @@ async function renderView(tab) {
           <h2 class="card-title">📜 Sổ Từ Vựng Phân Phần Thông Minh (${allWords.length.toLocaleString()} từ)</h2>
         </div>
 
-        <!-- 4 NGĂN TRẠNG THÁI TRÍ NHỚ -->
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">
           <button class="btn btn-primary btn-sm" data-st-tab="all">📚 Tất cả từ</button>
           <button class="btn btn-outline btn-sm" data-st-tab="unlearned">🆕 Chưa học</button>
@@ -629,7 +610,6 @@ async function renderView(tab) {
           <button class="btn btn-outline btn-sm" data-st-tab="mastered">✅ Đã thuộc lòng</button>
         </div>
 
-        <!-- THANH TÌM KIẾM & LỌC CẤP ĐỘ -->
         <div style="display:flex;gap:10px;margin-bottom:14px">
           <input type="search" id="vocab-search" placeholder="Tìm chữ Hán, pinyin hoặc nghĩa tiếng Việt..." />
           <select id="vocab-level-filter" style="width:160px;flex-shrink:0">
@@ -728,10 +708,10 @@ async function renderView(tab) {
     main.innerHTML = `
       <div class="card">
         <div class="card-header">
-          <h2 class="card-title">📋 Phòng Thi Thử HSK Chuẩn Quốc Tế (HSK 1 – 9)</h2>
+          <h2 class="card-title">📋 Phòng Thi Thử Panda HSK Chuẩn Quốc Tế (HSK 1 – 9)</h2>
           <span class="badge-pill">Đề thi sát cấu trúc thật · Sinh đề mới 100%</span>
         </div>
-        <p style="font-size:0.9rem;color:var(--text-muted)">Mỗi bài thi mô phỏng đầy đủ <strong>Nghe hiểu – Đọc hiểu – Viết (có Sư Phụ AI chấm điểm trực tiếp)</strong> và bấm giờ chuẩn quốc tế:</p>
+        <p style="font-size:0.9rem;color:var(--text-muted)">Mỗi bài thi mô phỏng đầy đủ <strong>Nghe hiểu – Đọc hiểu – Viết (có Sư Phụ Panda AI chấm điểm trực tiếp)</strong> và bấm giờ chuẩn quốc tế:</p>
         <div class="deck-grid">
           ${LEVELS.map((l) => `
             <div class="deck-card" data-start-exam="${l}">
@@ -774,9 +754,9 @@ async function renderView(tab) {
   } else if (tab === 'grammar' || tab === 'story') {
     main.innerHTML = `
       <div class="card">
-        <h2 class="card-title">${tab === 'grammar' ? '🎓 Cẩm Nang Ngữ Pháp & Sư Phụ AI' : '📚 Truyện Đọc Song Ngữ HSK'}</h2>
-        <p style="font-size:0.92rem">Bạn có thể hỏi trực tiếp <strong>Sư Phụ AI</strong> bất kỳ cấu trúc ngữ pháp nào hoặc yêu cầu tạo một đoạn truyện ngắn song ngữ Trung – Việt theo trình độ của bạn.</p>
-        <button class="btn btn-primary" id="btn-ask-ai-now">🧙‍♂️ Mở Sư Phụ AI Ngay</button>
+        <h2 class="card-title">${tab === 'grammar' ? '🎓 Cẩm Nang Ngữ Pháp & Sư Phụ Panda AI' : '📚 Truyện Đọc Song Ngữ Panda'}</h2>
+        <p style="font-size:0.92rem">Bạn có thể hỏi trực tiếp <strong>Sư Phụ Panda AI</strong> bất kỳ cấu trúc ngữ pháp nào hoặc yêu cầu tạo một đoạn truyện ngắn song ngữ Trung – Việt theo trình độ của bạn.</p>
+        <button class="btn btn-primary" id="btn-ask-ai-now">🐼 Mở Sư Phụ Panda AI Ngay</button>
       </div>`;
     document.getElementById('btn-ask-ai-now').onclick = openAITutorModal;
   } else if (tab === 'review') {
