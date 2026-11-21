@@ -1,37 +1,61 @@
-import { launchExamUI } from './exam/exam-engine.js';
 import { store } from './storage/db.js';
-import { dataLoader } from './data/loader.js';
-import { getDueWords, getNewWords, recordReview, getWordStatus, getTodayStr } from './memory/srs.js';
-import { tts } from './audio/tts.js';
 
 const LEVELS = [1, 2, 3, 4, 5, 6, 7];
 const levelLabel = (l) => (l === 7 ? 'HSK 7-9' : `HSK ${l}`);
 const AVATARS = ['🐼', '🐉', '🐯', '🦊', '🦁', '🐰', '🦅', '🦄'];
 
-let aiEnabled = false;
 let currentTab = 'home';
+let ALL_WORDS = [];
+let examLauncher = null;
 
-async function checkAIBackend() {
+const FALLBACK_WORDS = [
+  { id: 1, level: 1, hanzi: '你好', pinyin: 'nǐ hǎo', meaning: 'xin chào', pos: 'Đại từ / Chào hỏi' },
+  { id: 2, level: 1, hanzi: '谢谢', pinyin: 'xièxie', meaning: 'cảm ơn', pos: 'Động từ' },
+  { id: 3, level: 1, hanzi: '学习', pinyin: 'xuéxí', meaning: 'học tập', pos: 'Động từ' },
+  { id: 4, level: 1, hanzi: '中国', pinyin: 'Zhōngguó', meaning: 'Trung Quốc', pos: 'Danh từ' },
+  { id: 5, level: 1, hanzi: '朋友', pinyin: 'péngyou', meaning: 'bạn bè', pos: 'Danh từ' },
+  { id: 6, level: 2, hanzi: '准备', pinyin: 'zhǔnbèi', meaning: 'chuẩn bị', pos: 'Động từ' },
+  { id: 7, level: 2, hanzi: '开始', pinyin: 'kāishǐ', meaning: 'bắt đầu', pos: 'Động từ' },
+  { id: 8, level: 3, hanzi: '完成', pinyin: 'wánchéng', meaning: 'hoàn thành', pos: 'Động từ' },
+  { id: 9, level: 4, hanzi: '管理', pinyin: 'guǎnlǐ', meaning: 'quản lý', pos: 'Động từ' },
+  { id: 10, level: 5, hanzi: '效率', pinyin: 'xiàolǜ', meaning: 'hiệu suất', pos: 'Danh từ' }
+];
+
+function speakZh(text) {
   try {
-    const res = await fetch('./api/chat', { method: 'GET' });
-    const data = await res.json();
-    aiEnabled = Boolean(data.enabled);
-    const btn = document.getElementById('btn-ai-tutor');
-    if (btn) btn.classList.toggle('hidden', !aiEnabled);
-  } catch { aiEnabled = false; }
+    if (!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'zh-CN';
+    u.rate = 0.92;
+    window.speechSynthesis.speak(u);
+  } catch {}
+}
+
+function getWordStatus(rec) {
+  if (!rec) return 'Chưa học';
+  if ((rec.streak || 0) >= 3) return 'Đã thuộc lòng';
+  return 'Đang ôn tập';
+}
+
+function recordWord(hanzi, isCorrect) {
+  const prev = store.state.srs[hanzi] || { streak: 0, reviews: 0 };
+  store.state.srs[hanzi] = {
+    streak: isCorrect ? prev.streak + 1 : 0,
+    reviews: prev.reviews + 1,
+    lastReview: new Date().toISOString().slice(0, 10)
+  };
+  store.save();
 }
 
 function updateTopbar() {
   const p = store.state.profile;
   const lvl = Math.floor(p.xp / 100) + 1;
-  const elLvl = document.getElementById('ui-level');
-  const elStreak = document.getElementById('ui-streak');
-  const elCoins = document.getElementById('ui-coins');
-  const elBadge = document.getElementById('ui-user-badge');
-  if (elLvl) elLvl.textContent = `Cấp ${lvl} · ${levelLabel(p.activeWorld)}`;
-  if (elStreak) elStreak.textContent = `🔥 ${p.streak}`;
-  if (elCoins) elCoins.textContent = `🪙 ${p.coins}`;
-  if (elBadge) elBadge.textContent = `${p.avatar || '🐼'} ${p.name}`;
+  const setTxt = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  setTxt('ui-level', `Cấp ${lvl} · ${levelLabel(p.activeWorld)}`);
+  setTxt('ui-streak', `🔥 ${p.streak}`);
+  setTxt('ui-coins', `🪙 ${p.coins}`);
+  setTxt('ui-user-badge', `${p.avatar || '🐼'} ${p.name}`);
 
   const sideAuthBtn = document.getElementById('btn-auth-sidebar');
   if (sideAuthBtn) {
@@ -39,7 +63,7 @@ function updateTopbar() {
       ? `<span>${p.avatar || '🐼'}</span> <span class="side-txt">${p.name}</span>`
       : `<span>👤</span> <span class="side-txt">ĐĂNG NHẬP / ĐĂNG KÝ</span>`;
   }
-  document.documentElement.setAttribute('data-theme', store.state.settings.theme);
+  document.documentElement.setAttribute('data-theme', store.state.settings.theme || 'light');
 }
 
 function openModal(html) {
@@ -155,9 +179,7 @@ function openAuthModal(defaultMode = 'login') {
 
     if (document.getElementById('btn-submit-login')) {
       document.getElementById('btn-submit-login').onclick = () => {
-        const u = document.getElementById('auth-user').value;
-        const p = document.getElementById('auth-pass').value;
-        const res = store.login(u, p);
+        const res = store.login(document.getElementById('auth-user').value, document.getElementById('auth-pass').value);
         if (!res.ok) { document.getElementById('auth-err').textContent = res.error; return; }
         updateTopbar();
         closeModal();
@@ -167,10 +189,12 @@ function openAuthModal(defaultMode = 'login') {
 
     if (document.getElementById('btn-submit-reg')) {
       document.getElementById('btn-submit-reg').onclick = () => {
-        const displayName = document.getElementById('reg-name').value;
-        const username = document.getElementById('reg-user').value;
-        const password = document.getElementById('reg-pass').value;
-        const res = store.register({ username, password, displayName, avatar: selectedAvatar });
+        const res = store.register({
+          displayName: document.getElementById('reg-name').value,
+          username: document.getElementById('reg-user').value,
+          password: document.getElementById('reg-pass').value,
+          avatar: selectedAvatar
+        });
         if (!res.ok) { document.getElementById('auth-err').textContent = res.error; return; }
         updateTopbar();
         closeModal();
@@ -267,16 +291,15 @@ function openCreateDeckModal(onDone) {
   };
 }
 
-async function startQuickQuiz(words, title = 'Luyện tập từ vựng', returnTab = 'home') {
+function startQuickQuiz(words, title = 'Luyện tập từ vựng', returnTab = 'home') {
   if (!words || !words.length) return alert('Chưa có từ vựng trong mục này!');
-  const all = await dataLoader.getAllLoadedWords();
   let idx = 0, score = 0;
 
   const renderQ = () => {
     if (idx >= words.length) {
       store.state.profile.xp += score * 15;
       store.state.profile.coins += score * 3;
-      store.state.profile.lastStudyDate = getTodayStr();
+      store.state.profile.lastStudyDate = new Date().toISOString().slice(0, 10);
       store.save();
       updateTopbar();
       document.getElementById('main-view').innerHTML = `
@@ -289,10 +312,9 @@ async function startQuickQuiz(words, title = 'Luyện tập từ vựng', return
       return;
     }
     const target = words[idx];
-    const distractors = all.filter((w) => w.hanzi !== target.hanzi).sort(() => Math.random() - 0.5).slice(0, 3);
+    const distractors = ALL_WORDS.filter((w) => w.hanzi !== target.hanzi).sort(() => Math.random() - 0.5).slice(0, 3);
     const options = [target, ...distractors].sort(() => Math.random() - 0.5);
-    const t0 = performance.now();
-    tts.speak(target.hanzi);
+    speakZh(target.hanzi);
 
     document.getElementById('main-view').innerHTML = `
       <div style="max-width:640px;margin:0 auto;width:100%;display:flex;flex-direction:column;gap:14px">
@@ -310,26 +332,26 @@ async function startQuickQuiz(words, title = 'Luyện tập từ vựng', return
         </div>
       </div>
     `;
-    document.getElementById('btn-replay').onclick = () => tts.speak(target.hanzi);
+    document.getElementById('btn-replay').onclick = () => speakZh(target.hanzi);
     document.querySelectorAll('.option-btn').forEach((btn) => {
       btn.onclick = () => {
         const isOk = btn.dataset.hanzi === target.hanzi;
-        recordReview(target.hanzi, isOk, Math.round(performance.now() - t0));
+        recordWord(target.hanzi, isOk);
         if (isOk) { score++; btn.classList.add('correct'); }
         else { btn.classList.add('wrong'); }
-        setTimeout(() => { idx++; renderQ(); }, 600);
+        setTimeout(() => { idx++; renderQ(); }, 550);
       };
     });
   };
   renderQ();
 }
 
-async function renderView(tab) {
+function renderView(tab) {
   const main = document.getElementById('main-view');
   const p = store.state.profile;
-  const allWords = await dataLoader.getAllLoadedWords();
-  const due = getDueWords(allWords);
-  const fresh = getNewWords(allWords, p.activeWorld, 8);
+  const allWords = ALL_WORDS.length ? ALL_WORDS : FALLBACK_WORDS;
+  const due = allWords.filter((w) => store.state.srs[w.hanzi] && store.state.srs[w.hanzi].streak < 3).slice(0, 12);
+  const fresh = allWords.filter((w) => w.level === p.activeWorld && !store.state.srs[w.hanzi]).slice(0, 10);
   const customDecks = store.state.customDecks || [];
 
   if (tab === 'home') {
@@ -438,7 +460,7 @@ async function renderView(tab) {
                         <strong style="color:var(--primary)">${levelLabel(l)}</strong>
                         <span class="badge-pill">${learnedCnt}/${lvlWords.length} từ</span>
                       </div>
-                      <p style="font-size:0.8rem;color:var(--text-muted);margin:6px 0 0">Chia thành ${Math.ceil(lvlWords.length / 50)} chương học bài bản</p>
+                      <p style="font-size:0.8rem;color:var(--text-muted);margin:6px 0 0">Chia thành ${Math.max(1, Math.ceil(lvlWords.length / 50))} chương học bài bản</p>
                     </div>
                     <button class="btn btn-primary btn-sm btn-block">🗺️ Học theo lộ trình</button>
                   </div>
@@ -486,7 +508,7 @@ async function renderView(tab) {
       if (selectedChapter >= totalChapters) selectedChapter = 0;
 
       const chapterWords = levelWords.slice(selectedChapter * chapterSize, (selectedChapter + 1) * chapterSize);
-      const lessonsCount = Math.ceil(chapterWords.length / 10);
+      const lessonsCount = Math.max(1, Math.ceil(chapterWords.length / 10));
       const totalLearnedInLevel = levelWords.filter((w) => store.state.srs[w.hanzi]).length;
 
       main.innerHTML = `
@@ -538,7 +560,7 @@ async function renderView(tab) {
                       <div style="height:100%;width:${pct}%;background:var(--green)"></div>
                     </div>
                     <div style="display:flex;gap:8px">
-                      <button class="btn btn-outline btn-sm" data-preview-lesson="${lIdx}">👁️ Xem 10 từ trước</button>
+                      <button class="btn btn-outline btn-sm" data-preview-lesson="${lIdx}">👁️ Xem ${lessonWords.length} từ trước</button>
                       <button class="btn btn-primary btn-sm" data-study-lesson="${lIdx}">▶️ Vào học & Luyện tập</button>
                     </div>
                   </div>
@@ -669,13 +691,13 @@ async function renderView(tab) {
       document.getElementById('btn-v-next').onclick = () => { page++; renderVocab(); };
 
       document.querySelectorAll('[data-say]').forEach((b) => {
-        b.onclick = (e) => { e.stopPropagation(); tts.speak(b.dataset.say); };
+        b.onclick = (e) => { e.stopPropagation(); speakZh(b.dataset.say); };
       });
       document.querySelectorAll('[data-detail-word]').forEach((card) => {
         card.onclick = () => {
           const w = allWords.find((x) => x.hanzi === card.dataset.detailWord);
           if (!w) return;
-          tts.speak(w.hanzi);
+          speakZh(w.hanzi);
           openModal(`
             <div style="text-align:center">
               <span class="badge-pill">${levelLabel(w.level)} · ${w.pos || 'Từ vựng'}</span>
@@ -743,7 +765,11 @@ async function renderView(tab) {
       ` : ''}
     `;
     document.querySelectorAll('[data-start-exam]').forEach((card) => {
-      card.onclick = () => launchExamUI(main, Number(card.dataset.startExam), allWords, () => renderView('exam'));
+      card.onclick = () => {
+        const lvl = Number(card.dataset.startExam);
+        if (examLauncher) examLauncher(main, lvl, allWords, () => renderView('exam'));
+        else startQuickQuiz(allWords.filter((w) => w.level === lvl).slice(0, 15), `Thi thử ${levelLabel(lvl)}`, 'exam');
+      };
     });
   } else if (tab === 'listen' || tab === 'speak' || tab === 'arena') {
     const sample = allWords.filter((w) => w.level === p.activeWorld).sort(() => Math.random() - 0.5).slice(0, 10);
@@ -776,9 +802,8 @@ function switchTab(tab) {
 }
 
 async function boot() {
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
+  // 1. Gắn sự kiện cho toàn bộ nút bấm & thanh điều hướng NGAY LẬP TỨC
   updateTopbar();
-
   document.querySelectorAll('.side-item').forEach((b) => { b.onclick = () => switchTab(b.dataset.tab); });
   document.getElementById('btn-home').onclick = () => switchTab('home');
   document.getElementById('btn-ai-tutor').onclick = openAITutorModal;
@@ -798,11 +823,10 @@ async function boot() {
 
   const searchInp = document.getElementById('global-dict-search');
   const drop = document.getElementById('global-search-dropdown');
-  searchInp.oninput = async () => {
+  searchInp.oninput = () => {
     const q = searchInp.value.trim().toLowerCase();
     if (!q) { drop.classList.add('hidden'); return; }
-    const all = await dataLoader.getAllLoadedWords();
-    const hits = all.filter((w) => w.hanzi.includes(q) || w.pinyin.toLowerCase().includes(q) || w.meaning.toLowerCase().includes(q)).slice(0, 8);
+    const hits = ALL_WORDS.filter((w) => w.hanzi.includes(q) || w.pinyin.toLowerCase().includes(q) || w.meaning.toLowerCase().includes(q)).slice(0, 8);
     drop.classList.remove('hidden');
     drop.innerHTML = hits.length
       ? hits.map((w) => `<div style="padding:8px 10px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
@@ -815,8 +839,38 @@ async function boot() {
     if (!e.target.closest('.dict-search-wrap')) drop.classList.add('hidden');
   });
 
-  await dataLoader.init();
-  await checkAIBackend();
+  // 2. Hiển thị ngay giao diện chính để không bao giờ bị treo màn hình chờ
+  ALL_WORDS = [...FALLBACK_WORDS];
   renderView('home');
+
+  // 3. Nạp kho từ vựng lớn & module phòng thi ở chế độ nền
+  try {
+    const modLoader = await import('./data/loader.js');
+    await modLoader.dataLoader.init();
+    const loaded = await modLoader.dataLoader.getAllLoadedWords();
+    if (loaded && loaded.length) {
+      ALL_WORDS = loaded;
+      renderView(currentTab);
+    }
+  } catch (err) {
+    console.warn('Dùng bộ từ vựng dự phòng:', err);
+  }
+
+  try {
+    const modExam = await import('./exam/exam-engine.js');
+    examLauncher = modExam.launchExamUI;
+  } catch {}
+
+  try {
+    const res = await fetch('./api/chat', { method: 'GET' });
+    const data = await res.json();
+    const btn = document.getElementById('btn-ai-tutor');
+    if (btn) btn.classList.toggle('hidden', !data.enabled);
+  } catch {}
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  }
 }
+
 boot();
