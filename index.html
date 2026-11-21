@@ -4,8 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
   <meta name="theme-color" content="#b91c1c" />
-  <title>Long Môn HSK — Học Tiếng Trung Qua Trò Chơi</title>
+  <title>Long Môn HSK — Chinh Phục Tiếng Trung Toàn Diện</title>
   <link rel="manifest" href="./manifest.json" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800;900&family=Noto+Serif+SC:wght@600;700;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="./css/style.css" />
   <script src="https://unpkg.com/pinyin-pro@3.26.0/dist/index.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.5/dist/hanzi-writer.min.js" defer></script>
@@ -14,10 +17,10 @@
   <div id="app" class="app-shell">
     <header class="topbar">
       <div class="brand" id="btn-home" role="button" tabindex="0">
-        <span class="brand-logo">🐉</span>
+        <div class="brand-badge">🐉</div>
         <div class="brand-info">
           <span class="brand-title">Long Môn HSK</span>
-          <span class="player-level" id="ui-level">Cấp 1 · Tân Thủ</span>
+          <span class="player-level" id="ui-level">Cấp 1 · HSK 1</span>
         </div>
       </div>
       <div class="xp-bar-wrap">
@@ -25,22 +28,28 @@
         <span class="xp-bar-text" id="ui-xp-text">0 / 100 XP</span>
       </div>
       <div class="stats-pills">
-        <span class="pill" id="ui-streak">🔥 0</span>
-        <span class="pill" id="ui-freeze">❄️ 1</span>
-        <span class="pill" id="ui-coins">🪙 0</span>
+        <span class="pill pill-streak" id="ui-streak" title="Chuỗi ngày học">🔥 0</span>
+        <span class="pill pill-freeze" id="ui-freeze" title="Băng bảo vệ">❄️ 1</span>
+        <span class="pill pill-coins" id="ui-coins" title="Long Châu">🪙 0</span>
       </div>
     </header>
 
     <main id="main-view" class="main-view">
-      <div class="card"><p>Đang đánh thức Rồng Con & nạp kho từ vựng...</p></div>
+      <div class="card hero-card" style="text-align:center;padding:32px 16px">
+        <div style="font-size:2.4rem;margin-bottom:8px">🐉</div>
+        <p style="font-weight:700;margin:0">Đang mở cổng Long Môn & nạp kho từ vựng...</p>
+      </div>
     </main>
 
-    <button id="btn-ai-tutor" class="fab-tutor hidden">🧙‍♂️ <span>Hỏi Sư Phụ</span></button>
+    <button id="btn-ai-tutor" class="fab-tutor hidden">
+      <span class="fab-pulse"></span>
+      🧙‍♂️ <span>Hỏi Sư Phụ AI</span>
+    </button>
 
     <nav class="bottom-nav">
       <button class="nav-btn active" data-tab="home"><span class="nav-icon">🏯</span><span class="nav-label">Trang chủ</span></button>
       <button class="nav-btn" data-tab="map"><span class="nav-icon">🗺️</span><span class="nav-label">Hành trình</span></button>
-      <button class="nav-btn" data-tab="arcade"><span class="nav-icon">🎮</span><span class="nav-label">Luyện tập</span></button>
+      <button class="nav-btn" data-tab="arcade"><span class="nav-icon">🏛️</span><span class="nav-label">Thi & Luyện</span></button>
       <button class="nav-btn" data-tab="vocab"><span class="nav-icon">📜</span><span class="nav-label">Sổ từ</span></button>
       <button class="nav-btn" data-tab="stats"><span class="nav-icon">📊</span><span class="nav-label">Thống kê</span></button>
       <button class="nav-btn" data-tab="profile"><span class="nav-icon">🏅</span><span class="nav-label">Hồ sơ</span></button>
@@ -49,7 +58,7 @@
 
   <div id="modal-backdrop" class="modal-backdrop hidden">
     <div class="modal-card">
-      <button id="modal-close" class="modal-close">✕</button>
+      <button id="modal-close" class="modal-close" aria-label="Đóng">✕</button>
       <div id="modal-body"></div>
     </div>
   </div>
