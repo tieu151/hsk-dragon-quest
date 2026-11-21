@@ -3,6 +3,9 @@ import { dataLoader } from './data/loader.js';
 import { getDueWords, getNewWords, recordReview, getWordStatus, getTodayStr } from './memory/srs.js';
 import { tts } from './audio/tts.js';
 
+const LEVELS = [1, 2, 3, 4, 5, 6, 7];
+const levelLabel = (l) => (l === 7 ? 'HSK 7-9' : `HSK ${l}`);
+
 let aiEnabled = false;
 let currentTab = 'home';
 
@@ -19,7 +22,7 @@ async function checkAIBackend() {
 function updateTopbar() {
   const p = store.state.profile;
   const lvl = Math.floor(p.xp / 100) + 1;
-  document.getElementById('ui-level').textContent = `Cấp ${lvl} · HSK ${p.activeWorld}`;
+  document.getElementById('ui-level').textContent = `Cấp ${lvl} · ${levelLabel(p.activeWorld)}`;
   document.getElementById('ui-xp-bar').style.width = `${p.xp % 100}%`;
   document.getElementById('ui-xp-text').textContent = `${p.xp % 100} / 100 XP`;
   document.getElementById('ui-streak').textContent = `🔥 ${p.streak}`;
@@ -40,13 +43,13 @@ function closeModal() {
 function openAITutorModal() {
   const lvl = store.state.profile.activeWorld;
   openModal(`
-    <h3 class="card-title">🧙‍♂️ Sư Phụ AI (HSK ${lvl})</h3>
-    <p style="font-size:0.85rem;color:var(--text-muted)">Hỏi cách dùng từ, đặt câu hoặc hội thoại thực tế theo cấp HSK ${lvl}.</p>
+    <h3 class="card-title">🧙‍♂️ Sư Phụ AI (${levelLabel(lvl)})</h3>
+    <p style="font-size:0.85rem;color:var(--text-muted)">Hỏi cách dùng từ, phân biệt từ đồng nghĩa hoặc hội thoại theo cấp ${levelLabel(lvl)}.</p>
     <div id="ai-chat-box" style="min-height:140px;max-height:260px;overflow-y:auto;background:var(--surface-alt);padding:10px;border-radius:10px;margin-bottom:10px;font-size:0.92rem">
-      <div><strong>Sư phụ:</strong> 你好！(Nǐ hǎo!) Hôm nay con muốn luyện từ vựng hay đặt câu nào?</div>
+      <div><strong>Sư phụ:</strong> 你好！(Nǐ hǎo!) Hôm nay con muốn luyện từ vựng hay ngữ pháp ${levelLabel(lvl)} nào?</div>
     </div>
     <div style="display:flex;gap:8px">
-      <input type="text" id="ai-input" placeholder="Ví dụ: Phân biệt 二 và 两..." maxlength="300" />
+      <input type="text" id="ai-input" placeholder="Nhập câu hỏi tiếng Việt hoặc tiếng Trung..." maxlength="300" />
       <button class="btn btn-primary" id="ai-send">Gửi</button>
     </div>
   `);
@@ -108,7 +111,7 @@ async function startQuickQuiz(words) {
       <div class="card" style="text-align:center">
         <div style="display:flex;justify-content:space-between;font-size:0.85rem;color:var(--text-muted)">
           <span>Câu ${idx + 1}/${words.length}</span>
-          <span>HSK ${target.level}</span>
+          <span>${levelLabel(target.level)}</span>
         </div>
         <div class="hanzi-xl" style="margin:14px 0 4px">${target.hanzi}</div>
         <div style="color:var(--primary);font-weight:700;margin-bottom:10px">${target.pinyin}</div>
@@ -141,22 +144,23 @@ async function renderView(tab) {
   if (tab === 'home') {
     const due = getDueWords(allWords);
     const fresh = getNewWords(allWords, p.activeWorld, 6);
+    const countCurrent = allWords.filter((w) => w.level === p.activeWorld).length;
     main.innerHTML = `
       <div class="card">
         <div class="card-header">
           <h2 class="card-title">🐉 Chào mừng trở lại Long Môn!</h2>
           <span class="badge-pill">${aiEnabled ? '🟢 AI Online' : '⚪ Offline Mode'}</span>
         </div>
-        <p style="margin:0 0 12px;font-size:0.92rem">Kho từ hiện có: <strong>${allWords.length}</strong> từ HSK 1–5 · Cần ôn hôm nay: <strong>${due.length}</strong> từ.</p>
+        <p style="margin:0 0 12px;font-size:0.92rem">Tổng kho: <strong>${allWords.length.toLocaleString()}</strong> từ (HSK 1–9) · Cấp <strong>${levelLabel(p.activeWorld)}</strong>: <strong>${countCurrent.toLocaleString()}</strong> từ · Cần ôn: <strong>${due.length}</strong> từ.</p>
         <div class="grid-2">
           <button class="btn btn-primary" id="btn-learn-new">⚡ Học ${fresh.length} từ mới</button>
           <button class="btn btn-gold" id="btn-review-due">🔁 Ôn tập (${due.length})</button>
         </div>
       </div>
       <div class="card">
-        <h3 class="card-title">Chọn cấp độ HSK đang luyện</h3>
-        <div class="grid-3" style="margin-top:10px">
-          ${[1,2,3,4,5].map((l) => `<button class="btn ${p.activeWorld === l ? 'btn-primary' : 'btn-outline'} btn-sm" data-set-world="${l}">HSK ${l}</button>`).join('')}
+        <h3 class="card-title">Chọn cấp độ HSK đang luyện (HSK 1 – 9)</h3>
+        <div class="grid-4" style="margin-top:10px">
+          ${LEVELS.map((l) => `<button class="btn ${p.activeWorld === l ? 'btn-primary' : 'btn-outline'} btn-sm" data-set-world="${l}">${levelLabel(l)}</button>`).join('')}
         </div>
       </div>
     `;
@@ -167,15 +171,17 @@ async function renderView(tab) {
     });
   } else if (tab === 'map') {
     const levelWords = allWords.filter((w) => w.level === p.activeWorld);
+    const totalStages = Math.ceil(levelWords.length / 10);
+    const showStages = Math.min(totalStages, 50);
     main.innerHTML = `
       <div class="card">
-        <h2 class="card-title">🗺️ Hành Trình Thế Giới ${p.activeWorld} (HSK ${p.activeWorld})</h2>
-        <p style="font-size:0.88rem;color:var(--text-muted)">Tổng ${levelWords.length} từ vựng. Chọn chặng để chinh phục:</p>
-        <div style="display:flex;flex-direction:column;gap:8px">
-          ${Array.from({ length: Math.ceil(levelWords.length / 8) }, (_, idx) => {
-            const slice = levelWords.slice(idx * 8, idx * 8 + 8);
+        <h2 class="card-title">🗺️ Hành Trình ${levelLabel(p.activeWorld)} (${levelWords.length.toLocaleString()} từ)</h2>
+        <p style="font-size:0.88rem;color:var(--text-muted)">Hiển thị ${showStages}/${totalStages} chặng đầu (10 từ/chặng). Chọn chặng để chinh phục:</p>
+        <div style="display:flex;flex-direction:column;gap:8px;max-height:58dvh;overflow-y:auto">
+          ${Array.from({ length: showStages }, (_, idx) => {
+            const slice = levelWords.slice(idx * 10, idx * 10 + 10);
             return `<button class="btn btn-outline" style="justify-content:space-between" data-stage="${idx}">
-              <span>🏯 Chặng ${idx + 1}: ${slice[0]?.hanzi} ... (${slice.length} từ)</span>
+              <span>🏯 Chặng ${idx + 1}: ${slice[0]?.hanzi} · ${slice[1]?.hanzi || ''} (${slice.length} từ)</span>
               <span>▶️</span>
             </button>`;
           }).join('')}
@@ -184,7 +190,7 @@ async function renderView(tab) {
     document.querySelectorAll('[data-stage]').forEach((b) => {
       b.onclick = () => {
         const i = Number(b.dataset.stage);
-        startQuickQuiz(levelWords.slice(i * 8, i * 8 + 8));
+        startQuickQuiz(levelWords.slice(i * 10, i * 10 + 10));
       };
     });
   } else if (tab === 'arcade') {
@@ -192,23 +198,34 @@ async function renderView(tab) {
     main.innerHTML = `
       <div class="card">
         <h2 class="card-title">🎮 Đấu Trường Luyện Phản Xạ</h2>
-        <p style="font-size:0.9rem">Luyện phản xạ nhanh 10 từ ngẫu nhiên cấp HSK ${p.activeWorld}.</p>
+        <p style="font-size:0.9rem">Luyện phản xạ nhanh 10 từ ngẫu nhiên cấp <strong>${levelLabel(p.activeWorld)}</strong>.</p>
         <button class="btn btn-primary btn-block" id="btn-start-arcade">🚀 Bắt đầu ngay</button>
       </div>`;
     document.getElementById('btn-start-arcade').onclick = () => startQuickQuiz(sample);
   } else if (tab === 'vocab') {
+    let filterLevel = 0;
     main.innerHTML = `
       <div class="card">
-        <h2 class="card-title">📜 Sổ Từ Vựng (${allWords.length} từ)</h2>
-        <input type="search" id="vocab-search" placeholder="Tìm chữ Hán, pinyin hoặc nghĩa Việt..." style="margin:10px 0" />
+        <h2 class="card-title">📜 Sổ Từ Vựng (${allWords.length.toLocaleString()} từ)</h2>
+        <div style="display:flex;gap:8px;margin:10px 0">
+          <input type="search" id="vocab-search" placeholder="Tìm chữ Hán, pinyin hoặc nghĩa..." />
+          <select id="vocab-level-filter" style="width:130px;flex-shrink:0">
+            <option value="0">Tất cả cấp</option>
+            ${LEVELS.map((l) => `<option value="${l}">${levelLabel(l)}</option>`).join('')}
+          </select>
+        </div>
         <div id="vocab-list" style="display:flex;flex-direction:column;gap:8px;max-height:55dvh;overflow-y:auto"></div>
       </div>`;
-    const renderList = (q = '') => {
-      const k = q.toLowerCase();
-      const filtered = allWords.filter((w) => !k || w.hanzi.includes(k) || w.pinyin.toLowerCase().includes(k) || w.meaning.toLowerCase().includes(k)).slice(0, 60);
+    const renderList = () => {
+      const k = document.getElementById('vocab-search').value.trim().toLowerCase();
+      const filtered = allWords.filter((w) => {
+        if (filterLevel && w.level !== filterLevel) return false;
+        return !k || w.hanzi.includes(k) || w.pinyin.toLowerCase().includes(k) || w.meaning.toLowerCase().includes(k);
+      }).slice(0, 80);
       document.getElementById('vocab-list').innerHTML = filtered.map((w) => `
         <div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border:1px solid var(--border);border-radius:10px">
           <div>
+            <span class="badge-pill" style="margin-right:4px">${levelLabel(w.level)}</span>
             <strong class="hanzi-md">${w.hanzi}</strong> <span style="color:var(--primary)">${w.pinyin}</span>
             <div style="font-size:0.85rem;color:var(--text-muted)">${w.meaning}</div>
           </div>
@@ -220,7 +237,8 @@ async function renderView(tab) {
       document.querySelectorAll('[data-say]').forEach((b) => { b.onclick = () => tts.speak(b.dataset.say); });
     };
     renderList();
-    document.getElementById('vocab-search').oninput = (e) => renderList(e.target.value);
+    document.getElementById('vocab-search').oninput = renderList;
+    document.getElementById('vocab-level-filter').onchange = (e) => { filterLevel = Number(e.target.value); renderList(); };
   } else if (tab === 'stats') {
     const learned = Object.keys(store.state.srs).length;
     const mastered = Object.values(store.state.srs).filter((r) => r.streak >= 3).length;

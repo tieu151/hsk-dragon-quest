@@ -1,6 +1,11 @@
-const CACHE_NAME = 'longmon-hsk-v1';
+const CACHE_NAME = 'longmon-hsk-v2-hsk7';
 self.addEventListener('install', () => self.skipWaiting());
-self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
+self.addEventListener('activate', (e) => {
+  e.waitUntil(
+    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))))
+  );
+  self.clients.claim();
+});
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET' || event.request.url.includes('/api/')) return;
   event.respondWith(
