@@ -1,4 +1,4 @@
-const CACHE_NAME = 'longmon-hsk-v3-pro-ui';
+const CACHE_NAME = 'longmon-hsk-v4-dashboard';
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => {
   e.waitUntil(

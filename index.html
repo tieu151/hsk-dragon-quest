@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
   <meta name="theme-color" content="#b91c1c" />
-  <title>Long Môn HSK — Chinh Phục Tiếng Trung Toàn Diện</title>
+  <title>Long Môn HSK — Nền Tảng Học Tiếng Trung Toàn Diện</title>
   <link rel="manifest" href="./manifest.json" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -14,48 +14,65 @@
   <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.5/dist/hanzi-writer.min.js" defer></script>
 </head>
 <body>
-  <div id="app" class="app-shell">
-    <header class="topbar">
-      <div class="brand" id="btn-home" role="button" tabindex="0">
-        <div class="brand-badge">🐉</div>
-        <div class="brand-info">
-          <span class="brand-title">Long Môn HSK</span>
-          <span class="player-level" id="ui-level">Cấp 1 · HSK 1</span>
+  <div id="app" class="layout-wrapper">
+    <!-- SIDEBAR BÊN TRÁI GIỐNG BAOLINGO -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand" id="btn-home">
+        <div class="brand-logo-box">🐉</div>
+        <span class="brand-name">Long Môn HSK</span>
+      </div>
+
+      <nav class="sidebar-menu">
+        <button class="side-item active" data-tab="home"><span class="side-ico">🏠</span><span class="side-txt">Trang chủ</span></button>
+        <button class="side-item" data-tab="practice"><span class="side-ico">📖</span><span class="side-txt">Luyện tập</span></button>
+        <button class="side-item" data-tab="listen"><span class="side-ico">🎧</span><span class="side-txt">Luyện nghe</span></button>
+        <button class="side-item" data-tab="speak"><span class="side-ico">🎙️</span><span class="side-txt">Luyện phát âm</span></button>
+        <button class="side-item active-soft" data-tab="vocab"><span class="side-ico">📙</span><span class="side-txt">Từ vựng</span></button>
+        <button class="side-item" data-tab="grammar"><span class="side-ico">🎓</span><span class="side-txt">Ngữ pháp</span></button>
+        <button class="side-item" data-tab="review"><span class="side-ico">🔁</span><span class="side-txt">Ôn tập</span></button>
+        <button class="side-item" data-tab="exam"><span class="side-ico">📋</span><span class="side-txt">Luyện thi HSK</span></button>
+        <button class="side-item" data-tab="arena"><span class="side-ico">⚔️</span><span class="side-txt">Đấu Trường Từ Vựng</span></button>
+        <button class="side-item" data-tab="story"><span class="side-ico">📚</span><span class="side-txt">Truyện đọc</span><span class="badge-new">MỚI</span></button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button class="btn btn-primary btn-block" id="btn-open-ai-side">🧙‍♂️ HỎI SƯ PHỤ AI</button>
+        <button class="collapse-btn" id="btn-toggle-sidebar">« Thu gọn</button>
+      </div>
+    </aside>
+
+    <!-- KHU VỰC CHÍNH BÊN PHẢI -->
+    <div class="content-shell">
+      <header class="top-header">
+        <button class="mobile-menu-btn" id="btn-mobile-menu">☰</button>
+        <div class="dict-search-wrap">
+          <span class="search-ico">🔍</span>
+          <input type="search" id="global-dict-search" placeholder="Từ điển: gõ chữ Hán, pinyin hoặc nghĩa tiếng Việt..." />
+          <div id="global-search-dropdown" class="search-dropdown hidden"></div>
         </div>
-      </div>
-      <div class="xp-bar-wrap">
-        <div class="xp-bar-fill" id="ui-xp-bar" style="width: 0%"></div>
-        <span class="xp-bar-text" id="ui-xp-text">0 / 100 XP</span>
-      </div>
-      <div class="stats-pills">
-        <span class="pill pill-streak" id="ui-streak" title="Chuỗi ngày học">🔥 0</span>
-        <span class="pill pill-freeze" id="ui-freeze" title="Băng bảo vệ">❄️ 1</span>
-        <span class="pill pill-coins" id="ui-coins" title="Long Châu">🪙 0</span>
-      </div>
-    </header>
 
-    <main id="main-view" class="main-view">
-      <div class="card hero-card" style="text-align:center;padding:32px 16px">
-        <div style="font-size:2.4rem;margin-bottom:8px">🐉</div>
-        <p style="font-weight:700;margin:0">Đang mở cổng Long Môn & nạp kho từ vựng...</p>
-      </div>
-    </main>
+        <div class="header-actions">
+          <span class="stat-chip" id="ui-level">Cấp 1 · HSK 1</span>
+          <span class="stat-chip" id="ui-streak" title="Chuỗi ngày học">🔥 0</span>
+          <span class="stat-chip" id="ui-coins" title="Xu thưởng">🪙 0</span>
+          <button class="icon-circle-btn" id="btn-theme-top" title="Đổi giao diện Sáng / Tối">☀️</button>
+          <span class="lang-pill">🇻🇳 Tiếng Việt</span>
+        </div>
+      </header>
 
-    <button id="btn-ai-tutor" class="fab-tutor hidden">
-      <span class="fab-pulse"></span>
-      🧙‍♂️ <span>Hỏi Sư Phụ AI</span>
-    </button>
-
-    <nav class="bottom-nav">
-      <button class="nav-btn active" data-tab="home"><span class="nav-icon">🏯</span><span class="nav-label">Trang chủ</span></button>
-      <button class="nav-btn" data-tab="map"><span class="nav-icon">🗺️</span><span class="nav-label">Hành trình</span></button>
-      <button class="nav-btn" data-tab="arcade"><span class="nav-icon">🏛️</span><span class="nav-label">Thi & Luyện</span></button>
-      <button class="nav-btn" data-tab="vocab"><span class="nav-icon">📜</span><span class="nav-label">Sổ từ</span></button>
-      <button class="nav-btn" data-tab="stats"><span class="nav-icon">📊</span><span class="nav-label">Thống kê</span></button>
-      <button class="nav-btn" data-tab="profile"><span class="nav-icon">🏅</span><span class="nav-label">Hồ sơ</span></button>
-    </nav>
+      <main id="main-view" class="dashboard-main">
+        <div class="card" style="text-align:center;padding:30px">Đang tải dữ liệu học tập...</div>
+      </main>
+    </div>
   </div>
 
+  <!-- NÚT NỔI TRỢ LÝ AI -->
+  <button id="btn-ai-tutor" class="fab-tutor hidden">
+    <span class="fab-pulse"></span>
+    🧙‍♂️ <span>Sư Phụ AI</span>
+  </button>
+
+  <!-- MODAL -->
   <div id="modal-backdrop" class="modal-backdrop hidden">
     <div class="modal-card">
       <button id="modal-close" class="modal-close" aria-label="Đóng">✕</button>
@@ -63,7 +80,6 @@
     </div>
   </div>
 
-  <canvas id="confetti-canvas" class="confetti-canvas"></canvas>
   <script type="module" src="./js/app.js"></script>
 </body>
 </html>
