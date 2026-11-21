@@ -24,10 +24,14 @@ async function checkAIBackend() {
 function updateTopbar() {
   const p = store.state.profile;
   const lvl = Math.floor(p.xp / 100) + 1;
-  document.getElementById('ui-level').textContent = `Cấp ${lvl} · ${levelLabel(p.activeWorld)}`;
-  document.getElementById('ui-streak').textContent = `🔥 ${p.streak}`;
-  document.getElementById('ui-coins').textContent = `🪙 ${p.coins}`;
-  document.getElementById('ui-user-badge').textContent = `${p.avatar || '🐼'} ${p.name}`;
+  const elLvl = document.getElementById('ui-level');
+  const elStreak = document.getElementById('ui-streak');
+  const elCoins = document.getElementById('ui-coins');
+  const elBadge = document.getElementById('ui-user-badge');
+  if (elLvl) elLvl.textContent = `Cấp ${lvl} · ${levelLabel(p.activeWorld)}`;
+  if (elStreak) elStreak.textContent = `🔥 ${p.streak}`;
+  if (elCoins) elCoins.textContent = `🪙 ${p.coins}`;
+  if (elBadge) elBadge.textContent = `${p.avatar || '🐼'} ${p.name}`;
 
   const sideAuthBtn = document.getElementById('btn-auth-sidebar');
   if (sideAuthBtn) {
@@ -240,10 +244,10 @@ function openAITutorModal() {
 function openCreateDeckModal(onDone) {
   openModal(`
     <h3 class="card-title">➕ Tạo Bộ Thẻ Từ Vựng Mới</h3>
-    <p style="font-size:0.85rem;color:var(--text-muted)">Tự tạo bộ flashcard theo chủ đề công việc, giao tiếp hoặc từ khó của riêng bạn.</p>
+    <p style="font-size:0.85rem;color:var(--text-muted)">Nhập mỗi từ 1 dòng theo dạng: <strong>Chữ Hán | Pinyin | Nghĩa Việt</strong></p>
     <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">
       <input type="text" id="deck-title-inp" placeholder="Tên bộ thẻ (VD: Từ vựng công xưởng, Giao tiếp hàng ngày...)" />
-      <textarea id="deck-words-inp" rows="5" placeholder="Nhập mỗi từ 1 dòng theo dạng: Chữ Hán | Pinyin | Nghĩa Việt&#10;Ví dụ:&#10;仓库 | cāngkù | nhà kho&#10;进度 | jìndù | tiến độ"></textarea>
+      <textarea id="deck-words-inp" rows="5" placeholder="仓库 | cāngkù | nhà kho"></textarea>
       <button class="btn btn-primary btn-block" id="btn-save-deck">💾 Lưu Bộ Thẻ</button>
     </div>
   `);
@@ -774,8 +778,6 @@ function switchTab(tab) {
 async function boot() {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
   updateTopbar();
-  await dataLoader.init();
-  await checkAIBackend();
 
   document.querySelectorAll('.side-item').forEach((b) => { b.onclick = () => switchTab(b.dataset.tab); });
   document.getElementById('btn-home').onclick = () => switchTab('home');
@@ -813,6 +815,8 @@ async function boot() {
     if (!e.target.closest('.dict-search-wrap')) drop.classList.add('hidden');
   });
 
+  await dataLoader.init();
+  await checkAIBackend();
   renderView('home');
 }
 boot();
