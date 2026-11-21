@@ -16,6 +16,13 @@ function defaultState(displayName = 'Học viên Khách', avatar = '🐼') {
     srs: {},
     customDecks: [],
     examHistory: [],
+    inProgressExam: null,
+    watchedVideos: [],
+    dailyGoal: { targetWords: 15, todayCount: 0, date: new Date().toISOString().slice(0, 10) },
+    reminder: { enabled: false, time: '20:00', email: '' },
+    arenaStats: { bestScore: 0, wins: 0, badges: [] },
+    placementResult: null,
+    errorReports: [],
     settings: { theme: 'light' }
   };
 }
@@ -45,16 +52,17 @@ class MultiUserStore {
   _loadUserState(username) {
     try {
       const raw = localStorage.getItem(this._storageKey(username));
-      if (!raw) {
-        const acc = this.accounts.find((a) => a.username === username);
-        return defaultState(acc ? acc.displayName : 'Học viên Khách', acc ? acc.avatar : '🐼');
-      }
+      const acc = this.accounts.find((a) => a.username === username);
+      const base = defaultState(acc ? acc.displayName : 'Học viên Khách', acc ? acc.avatar : '🐼');
+      if (!raw) return base;
       const parsed = JSON.parse(raw);
-      const base = defaultState();
       return {
         ...base,
         ...parsed,
         profile: { ...base.profile, ...(parsed.profile || {}) },
+        dailyGoal: { ...base.dailyGoal, ...(parsed.dailyGoal || {}) },
+        reminder: { ...base.reminder, ...(parsed.reminder || {}) },
+        arenaStats: { ...base.arenaStats, ...(parsed.arenaStats || {}) },
         settings: { ...base.settings, ...(parsed.settings || {}) }
       };
     } catch {
@@ -76,11 +84,11 @@ class MultiUserStore {
     }
   }
 
-  register({ username, password, displayName, avatar = '🐉' }) {
+  register({ username, password, displayName, avatar = '🐼' }) {
     const cleanUser = String(username || '').trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
     if (cleanUser.length < 3) return { ok: false, error: 'Tên đăng nhập phải có ít nhất 3 ký tự (chữ không dấu hoặc số).' };
     if (!password || password.length < 4) return { ok: false, error: 'Mật khẩu phải có ít nhất 4 ký tự.' };
-    if (this.accounts.length >= 10) return { ok: false, error: 'Thiết bị đã đạt tối đa 10 tài khoản. Vui lòng xóa bớt tài khoản cũ.' };
+    if (this.accounts.length >= 10) return { ok: false, error: 'Thiết bị đã đạt tối đa 10 tài khoản.' };
     if (this.accounts.some((a) => a.username === cleanUser)) return { ok: false, error: 'Tên đăng nhập này đã tồn tại!' };
 
     const newAcc = {
@@ -132,17 +140,6 @@ class MultiUserStore {
     this._saveAccounts();
     localStorage.removeItem(this._storageKey(username));
     if (this.currentUsername === username) this.logout();
-  }
-
-  exportJSON() {
-    return JSON.stringify(this.state, null, 2);
-  }
-
-  resetAll() {
-    const keepName = this.state.profile.name;
-    const keepAvatar = this.state.profile.avatar;
-    this.state = defaultState(keepName, keepAvatar);
-    this.save();
   }
 }
 

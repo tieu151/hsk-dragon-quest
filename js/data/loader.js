@@ -1,29 +1,41 @@
 class DataLoader {
-  constructor() { this.vocabByLevel = new Map(); this.allWordsMap = new Map(); }
+  constructor() {
+    this.words = [];
+    this.loaded = false;
+  }
+
   async init() {
-    await this.loadLevel(1);
-    Promise.all([2, 3, 4, 5].map((l) => this.loadLevel(l)));
+    if (this.loaded) return this.words;
+    const files = [
+      './data/hsk1.json',
+      './data/hsk2.json',
+      './data/hsk3.json',
+      './data/hsk4.json',
+      './data/hsk5.json',
+      './data/hsk6.json',
+      './data/hsk7.json'
+    ];
+    const results = await Promise.all(
+      files.map(async (url, i) => {
+        try {
+          const res = await fetch(url);
+          if (!res.ok) return [];
+          const arr = await res.json();
+          return Array.isArray(arr) ? arr.map((w) => ({ ...w, level: w.level || (i + 1) })) : [];
+        } catch {
+          return [];
+        }
+      })
+    );
+    this.words = results.flat();
+    this.loaded = true;
+    return this.words;
   }
-  async loadLevel(level) {
-    if (this.vocabByLevel.has(level)) return this.vocabByLevel.get(level);
-    const res = await fetch(`./data/hsk${level}.tsv`);
-    const text = await res.text();
-    const words = [];
-    text.split(/\r?\n/).forEach((raw, i) => {
-      const line = raw.trim();
-      if (!line || line.startsWith('#')) return;
-      const [hanzi = '', pinyin = '', pos = '', meaning = '', topic = 'Chung', exZh = '', exPy = '', exVi = '', mnemonic = ''] = line.split('\t');
-      if (!hanzi) return;
-      const w = { id: `${level}_${i}`, level, hanzi: hanzi.trim(), pinyin: pinyin.trim(), pos: pos.trim(), meaning: meaning.trim(), topic: topic.trim(), exZh: exZh.trim(), exPy: exPy.trim(), exVi: exVi.trim(), mnemonic: mnemonic.trim() };
-      words.push(w);
-      this.allWordsMap.set(w.hanzi, w);
-    });
-    this.vocabByLevel.set(level, words);
-    return words;
-  }
+
   async getAllLoadedWords() {
-    await Promise.all([1, 2, 3, 4, 5].map((l) => this.loadLevel(l)));
-    return Array.from(this.allWordsMap.values());
+    if (!this.loaded) await this.init();
+    return this.words;
   }
 }
+
 export const dataLoader = new DataLoader();

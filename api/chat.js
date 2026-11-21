@@ -1,49 +1,76 @@
-const rateMap = new Map();
+const dailyUsage = new Map();
 
 export default async function handler(req, res) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Panda-User');
+  if (req.method === 'OPTIONS') return res.status(200).end();
 
-  if (req.method === 'OPTIONS' || req.method === 'GET') {
-    res.setHeader('X-AI-Enabled', apiKey ? 'true' : 'false');
-    return res.status(200).json({ enabled: Boolean(apiKey) });
+  const apiKey = process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY;
+  if (req.method === 'GET') {
+    return res.status(200).json({ enabled: Boolean(apiKey), authRequired: true });
   }
-  if (!apiKey) return res.status(503).json({ error: 'Sư phụ AI chưa được cấu hình GEMINI_API_KEY.' });
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
-  const ip = req.headers['x-forwarded-for'] || 'local';
-  const now = Date.now();
-  const recent = (rateMap.get(ip) || []).filter((t) => now - t < 60_000);
-  if (recent.length >= 20) return res.status(429).json({ error: 'Bạn hỏi hơi nhanh, nghỉ 1 phút nhé!' });
-  recent.push(now);
-  rateMap.set(ip, recent);
+  const userHeader = String(req.headers['x-panda-user'] || '').trim();
+  if (!userHeader || userHeader === 'guest') {
+    return res.status(401).json({ error: 'Vui lòng đăng nhập tài khoản Panda HSK để sử dụng tính năng này.' });
+  }
 
-  const { message = '' } = req.body || {};
-  const cleanMsg = String(message).trim().slice(0, 600);
-  if (!cleanMsg) return res.status(400).json({ error: 'Nội dung trống.' });
+  const body = req.body || {};
 
-  const systemPrompt = `Bạn là Sư Phụ AI thông thái chuyên sâu về toàn bộ ngôn ngữ và văn hóa Trung Quốc (từ sơ cấp HSK 1 đến cao cấp HSK 7-9, tiếng Trung giao tiếp đời sống, tiếng Trung công xưởng/thương mại, ngữ pháp, từ đồng nghĩa, thành ngữ cổ, chiết tự chữ Hán, luyện dịch Việt-Trung và sửa lỗi diễn đạt).
-Nguyên tắc trả lời:
-1. Giải đáp trực tiếp, sâu sắc và toàn diện mọi câu hỏi liên quan đến tiếng Trung mà người dùng đặt ra — KHÔNG tự giới hạn câu trả lời ở trình độ HSK 1.
-2. Khi đưa ra chữ Hán, luôn kèm theo Pinyin chuẩn thanh điệu và nghĩa tiếng Việt rõ ràng để người học dễ tiếp thu.
-3. Nếu người dùng viết câu tiếng Trung để nhờ kiểm tra, hãy chỉ ra lỗi sai (nếu có), giải thích nguyên nhân và gợi ý cách diễn đạt tự nhiên như người bản xứ.
-4. Trình bày gọn gàng, dễ đọc trên giao diện di động và web.`;
+  // Kiểm tra chống gian lận điểm Đấu Trường ở phía server
+  if (body.mode === 'arena_verify') {
+    const score = Number(body.score || 0);
+    const total = Number(body.total || 0);
+    const elapsedSec = Number(body.elapsedSec || 0);
+    const valid = score >= 0 && score <= total && total <= 30 && elapsedSec >= score * 0.8;
+    if (!valid) {
+      return res.status(400).json({ verified: false, error: 'Điểm số hoặc thời gian hoàn thành không hợp lệ.' });
+    }
+    const bonusXp = score * 20 + (score === total ? 50 : 0);
+    return res.status(200).json({ verified: true, bonusXp });
+  }
+
+  // Giới hạn 30 lượt gọi AI/ngày/tài khoản
+  const today = new Date().toISOString().slice(0, 10);
+  const quotaKey = `${userHeader}:${today}`;
+  const used = dailyUsage.get(quotaKey) || 0;
+  if (used >= 30) {
+    return res.status(429).json({ error: 'Bạn đã dùng hết 30 lượt AI hôm nay. Quay lại vào ngày mai nhé!' });
+  }
+  dailyUsage.set(quotaKey, used + 1);
+
+  if (!apiKey) {
+    return res.status(200).json({
+      reply: '⚠️ Máy chủ chưa cấu hình biến môi trường GEMINI_API_KEY trên Vercel. Hãy thêm GEMINI_API_KEY trong Settings -> Environment Variables.'
+    });
+  }
 
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-    const response = await fetch(url, {
+    let prompt = String(body.message || '').trim();
+    if (body.mode === 'pronunciation') {
+      prompt = `Bạn là giám khảo chấm phát âm tiếng Trung HSK.
+Câu mẫu: "${body.targetText || ''}"
+Nhận diện giọng nói nghe được: "${body.spokenText || ''}"
+Trả về đúng JSON thuần (không dùng markdown \`\`\`) theo mẫu:
+{"totalScore":85,"toneScore":80,"syllables":[{"char":"你","pinyin":"nǐ","score":85,"note":"Rõ thanh 3"}],"adviceVi":"Nhận xét chi tiết và gợi ý sửa thanh điệu bằng tiếng Việt"}`;
+    } else {
+      prompt = `Bạn là Sư Phụ Panda AI dạy tiếng Trung chuẩn HSK 3.0. Trả lời bằng tiếng Việt ngắn gọn, rõ ràng, có Pinyin và ví dụ.\nCâu hỏi của học viên (@${userHeader}): ${prompt}`;
+    }
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+    const apiRes = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ role: 'user', parts: [{ text: cleanMsg }] }],
-        generationConfig: { maxOutputTokens: 800 }
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.35, maxOutputTokens: 900 }
       })
     });
-    const data = await response.json();
-    const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Sư phụ đang suy nghĩ, con thử hỏi lại nhé...';
-    return res.status(200).json({ reply });
-  } catch {
-    return res.status(500).json({ error: 'Lỗi kết nối Gemini API.' });
+    const data = await apiRes.json();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Sư Phụ AI đang bận, vui lòng thử lại.';
+    return res.status(200).json({ reply: text, remainingToday: 30 - (used + 1) });
+  } catch (err) {
+    return res.status(500).json({ error: 'Lỗi kết nối AI: ' + err.message });
   }
 }

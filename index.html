@@ -3,14 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+  <meta name="description" content="Panda HSK — Nền tảng học tiếng Trung toàn diện theo chuẩn HSK 3.0 (HSK 1 đến HSK 9): từ vựng SRS, luyện thi thử, chấm phát âm AI, tập viết Hanzi và video bài giảng." />
+  <meta property="og:title" content="Panda HSK — Học Tiếng Trung & Luyện Thi HSK 1–9" />
+  <meta property="og:description" content="Lộ trình học tiếng Trung bài bản HSK 1–9, từ điển vẽ tay, luyện nói AI và thi thử chuẩn quốc tế." />
   <meta name="theme-color" content="#c23b2b" />
-  <title>Panda HSK — Nền Tảng Học Tiếng Trung Toàn Diện</title>
+  <title>Panda HSK — Nền Tảng Học Tiếng Trung Toàn Diện HSK 1–9</title>
   <link rel="manifest" href="./manifest.json" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800;900&family=Noto+Serif+SC:wght@600;700;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="./css/style.css" />
-  <script src="https://unpkg.com/pinyin-pro@3.26.0/dist/index.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.5/dist/hanzi-writer.min.js" defer></script>
 </head>
 <body>
@@ -23,15 +25,18 @@
 
       <nav class="sidebar-menu">
         <button class="side-item active" data-tab="home"><span class="side-ico">🏠</span><span class="side-txt">Trang chủ</span></button>
+        <button class="side-item" data-tab="placement"><span class="side-ico">🧭</span><span class="side-txt">Xếp lớp đầu vào</span></button>
         <button class="side-item" data-tab="journey"><span class="side-ico">🗺️</span><span class="side-txt">Hành trình bài bản</span></button>
         <button class="side-item" data-tab="practice"><span class="side-ico">📜</span><span class="side-txt">Sổ từ vựng</span></button>
-        <button class="side-item" data-tab="listen"><span class="side-ico">🎧</span><span class="side-txt">Luyện nghe</span></button>
-        <button class="side-item" data-tab="speak"><span class="side-ico">🎙️</span><span class="side-txt">Luyện phát âm</span></button>
-        <button class="side-item" data-tab="grammar"><span class="side-ico">🎓</span><span class="side-txt">Ngữ pháp</span></button>
+        <button class="side-item" data-tab="dictionary"><span class="side-ico">🔍</span><span class="side-txt">Từ điển & Vẽ tay</span></button>
+        <button class="side-item" data-tab="writing"><span class="side-ico">✍️</span><span class="side-txt">Tập viết chữ Hán</span></button>
+        <button class="side-item" data-tab="video"><span class="side-ico">🎬</span><span class="side-txt">Video bài giảng</span></button>
+        <button class="side-item" data-tab="speak"><span class="side-ico">🎙️</span><span class="side-txt">Luyện nói AI</span></button>
         <button class="side-item" data-tab="review"><span class="side-ico">🔁</span><span class="side-txt">Ôn tập SRS</span></button>
-        <button class="side-item" data-tab="exam"><span class="side-ico">📋</span><span class="side-txt">Luyện thi HSK</span></button>
-        <button class="side-item" data-tab="arena"><span class="side-ico">⚔️</span><span class="side-txt">Đấu Trường Từ Vựng</span></button>
-        <button class="side-item" data-tab="story"><span class="side-ico">📚</span><span class="side-txt">Truyện đọc</span><span class="badge-new">MỚI</span></button>
+        <button class="side-item" data-tab="exam"><span class="side-ico">📋</span><span class="side-txt">Luyện thi HSK 1–9</span></button>
+        <button class="side-item" data-tab="arena"><span class="side-ico">⚔️</span><span class="side-txt">Đấu Trường</span></button>
+        <button class="side-item" data-tab="stats"><span class="side-ico">📊</span><span class="side-txt">Thống kê & Nhắc học</span></button>
+        <button class="side-item" data-tab="about-hsk"><span class="side-ico">📘</span><span class="side-txt">Giới thiệu HSK</span></button>
       </nav>
 
       <div class="sidebar-footer">
@@ -59,14 +64,26 @@
       </header>
 
       <main id="main-view" class="dashboard-main">
-        <div class="card" style="text-align:center;padding:30px">Đang khởi tạo hệ thống học tập...</div>
+        <div class="card" style="text-align:center;padding:30px">Đang khởi tạo Panda HSK...</div>
       </main>
+
+      <footer style="margin-top:24px;padding:16px 20px;border-top:1px solid var(--border);font-size:0.8rem;color:var(--text-muted);display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px">
+        <div>
+          <strong>Panda HSK</strong> · Nguồn dữ liệu mở: <em>Complete HSK Vocabulary (HSK 3.0)</em>, <em>CC-CEDICT</em>, <em>Hanzi Writer</em>.
+        </div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap">
+          <a href="#about-hsk" data-pub-link="about-hsk" style="color:var(--primary)">Giới thiệu các cấp HSK</a>
+          <a href="#privacy" data-pub-link="privacy" style="color:var(--primary)">Chính sách bảo mật</a>
+          <a href="#terms" data-pub-link="terms" style="color:var(--primary)">Điều khoản sử dụng</a>
+          <a href="#contact" data-pub-link="contact" style="color:var(--primary)">Liên hệ & Góp ý</a>
+        </div>
+      </footer>
     </div>
   </div>
 
-  <button id="btn-ai-tutor" class="fab-tutor hidden">
+  <button id="btn-ai-tutor" class="fab-tutor">
     <span class="fab-pulse"></span>
-    🧙‍♂️ <span>Hỏi Sư Phụ AI</span>
+    🐼 <span>Hỏi Sư Phụ AI</span>
   </button>
 
   <div id="modal-backdrop" class="modal-backdrop hidden">
