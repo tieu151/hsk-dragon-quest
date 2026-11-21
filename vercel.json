@@ -1,0 +1,11 @@
+{
+  "cleanUrls": false,
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Access-Control-Expose-Headers", "value": "X-AI-Enabled" }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "name": "hsk-dragon-quest",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "import:hsk": "node tools/import-official-hsk.js",
+    "validate": "node tools/validate.js"
+  }
+}

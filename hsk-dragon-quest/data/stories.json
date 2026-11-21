@@ -1,0 +1,183 @@
+[
+  {
+    "id": "s1_1",
+    "level": 1,
+    "title": "你好，新朋友！",
+    "titleVi": "Xin chào, người bạn mới!",
+    "sentences": [
+      { "zh": "你好！我叫小明。", "py": "Nǐ hǎo! Wǒ jiào Xiǎomíng.", "vi": "Xin chào! Tôi tên là Tiểu Minh." },
+      { "zh": "我是中国人，我住在上海。", "py": "Wǒ shì Zhōngguó rén, wǒ zhù zài Shànghǎi.", "vi": "Tôi là người Trung Quốc, tôi sống ở Thượng Hải." },
+      { "zh": "你是哪国人？", "py": "Nǐ shì nǎ guó rén?", "vi": "Bạn là người nước nào?" },
+      { "zh": "我是越南人，我爱学习汉语。", "py": "Wǒ shì Yuènán rén, wǒ ài xuéxí Hànyǔ.", "vi": "Tôi là người Việt Nam, tôi thích học tiếng Trung." }
+    ],
+    "questions": [
+      { "q": "Tiểu Minh sống ở đâu?", "options": ["Bắc Kinh", "Thượng Hải", "Hà Nội", "Quảng Châu"], "answer": 1 },
+      { "q": "Người nói chuyện thứ hai là người nước nào?", "options": ["Trung Quốc", "Nhật Bản", "Việt Nam", "Hàn Quốc"], "answer": 2 },
+      { "q": "Người đó thích làm gì?", "options": ["Học tiếng Trung", "Nấu ăn", "Đi ngủ", "Mua quần áo"], "answer": 0 }
+    ]
+  },
+  {
+    "id": "s1_2",
+    "level": 1,
+    "title": "去商店买水果",
+    "titleVi": "Đi cửa hàng mua hoa quả",
+    "sentences": [
+      { "zh": "今天天气很好，妈妈去商店。", "py": "Jīntiān tiānqì hěn hǎo, māma qù shāngdiàn.", "vi": "Thời tiết hôm nay rất đẹp, mẹ đi cửa hàng." },
+      { "zh": "妈妈想买一些苹果。", "py": "Māma xiǎng mǎi yīxiē píngguǒ.", "vi": "Mẹ muốn mua một ít táo." },
+      { "zh": "一个苹果三块钱。", "py": "Yī gè píngguǒ sān kuài qián.", "vi": "Một quả táo giá ba đồng." },
+      { "zh": "妈妈买了五个苹果，一共十五块钱。", "py": "Māma mǎi le wǔ gè píngguǒ, yīgòng shíwǔ kuài qián.", "vi": "Mẹ đã mua năm quả táo, tổng cộng mười lăm đồng." }
+    ],
+    "questions": [
+      { "q": "Mẹ đi đâu?", "options": ["Bệnh viện", "Trường học", "Cửa hàng", "Nhà hàng"], "answer": 2 },
+      { "q": "Một quả táo bao nhiêu tiền?", "options": ["2 đồng", "3 đồng", "5 đồng", "15 đồng"], "answer": 1 },
+      { "q": "Mẹ mua mấy quả táo?", "options": ["3 quả", "4 quả", "5 quả", "6 quả"], "answer": 2 }
+    ]
+  },
+  {
+    "id": "s2_1",
+    "level": 2,
+    "title": "哥哥的新房间",
+    "titleVi": "Căn phòng mới của anh trai",
+    "sentences": [
+      { "zh": "我哥哥非常喜欢运动，特别是打篮球。", "py": "Wǒ gēge fēicháng xǐhuan yùndòng, tèbié shì dǎ lánqiú.", "vi": "Anh trai tôi vô cùng thích vận động, đặc biệt là chơi bóng rổ." },
+      { "zh": "他的房间很大，也很干净。", "py": "Tā de fángjiān hěn dà, yě hěn gānjìng.", "vi": "Căn phòng của anh ấy rất rộng, cũng rất sạch sẽ." },
+      { "zh": "桌子上面放着很多报纸和书。", "py": "Zhuōzi shàngmiàn fàngzhe hěn duō bàozhǐ hé shū.", "vi": "Trên bàn đặt rất nhiều báo và sách." },
+      { "zh": "弟弟经常去哥哥的房间看书。", "py": "Dìdi jīngcháng qù gēge de fángjiān kànshū.", "vi": "Em trai thường xuyên sang phòng anh trai đọc sách." }
+    ],
+    "questions": [
+      { "q": "Anh trai thích môn thể thao nào nhất?", "options": ["Bóng đá", "Bóng rổ", "Bơi lội", "Chạy bộ"], "answer": 1 },
+      { "q": "Trên bàn của anh trai có gì?", "options": ["Táo và nước", "Báo và sách", "Quần áo", "Điện thoại"], "answer": 1 },
+      { "q": "Ai thường sang phòng anh trai đọc sách?", "options": ["Mẹ", "Bố", "Em trai", "Thầy giáo"], "answer": 2 }
+    ]
+  },
+  {
+    "id": "s2_2",
+    "level": 2,
+    "title": "第一次来北京",
+    "titleVi": "Lần đầu tiên đến Bắc Kinh",
+    "sentences": [
+      { "zh": "这是我第一次从越南来北京旅游。", "py": "Zhè shì wǒ dì-yī cì cóng Yuènán lái Běijīng lǚyóu.", "vi": "Đây là lần đầu tiên tôi từ Việt Nam đến Bắc Kinh du lịch." },
+      { "zh": "北京比河内冷，我多穿了一件衣服。", "py": "Běijīng bǐ Hénèi lěng, wǒ duō chuān le yī jiàn yīfu.", "vi": "Bắc Kinh lạnh hơn Hà Nội, tôi đã mặc thêm một chiếc áo." },
+      { "zh": "宾馆的服务员非常热情，帮助了我很多。", "py": "Bīnguǎn de fúwùyuán fēicháng rèqíng, bāngzhù le wǒ hěn duō.", "vi": "Nhân viên phục vụ của khách sạn vô cùng nhiệt tình, đã giúp đỡ tôi rất nhiều." },
+      { "zh": "她告诉我怎么坐车去学校。", "py": "Tā gàosu wǒ zěnme zuòchē qù xuéxiào.", "vi": "Cô ấy bảo tôi cách bắt xe đi đến trường học." }
+    ],
+    "questions": [
+      { "q": "Thời tiết Bắc Kinh thế nào so với Hà Nội?", "options": ["Nóng hơn", "Lạnh hơn", "Mưa nhiều hơn", "Giống hệt"], "answer": 1 },
+      { "q": "Ai đã giúp đỡ nhân vật chính ở khách sạn?", "options": ["Tài xế", "Nhân viên phục vụ", "Cảnh sát", "Bác sĩ"], "answer": 1 },
+      { "q": "Nhân vật chính đến Bắc Kinh làm gì?", "options": ["Du lịch", "Khám bệnh", "Bán hàng", "Hát"], "answer": 0 }
+    ]
+  },
+  {
+    "id": "s3_1",
+    "level": 3,
+    "title": "安静的图书馆",
+    "titleVi": "Thư viện yên tĩnh",
+    "sentences": [
+      { "zh": "周末的时候，我喜欢去学校的图书馆看书。", "py": "Zhōumò de shíhou, wǒ xǐhuan qù xuéxiào de túshūguǎn kànshū.", "vi": "Vào cuối tuần, tôi thích đến thư viện của trường đọc sách." },
+      { "zh": "图书馆里非常安静，大家都在认真学习。", "py": "Túshūguǎn lǐ fēicháng ānjìng, dàjiā dōu zài rènzhēn xuéxí.", "vi": "Trong thư viện vô cùng yên tĩnh, mọi người đều đang chăm chỉ học tập." },
+      { "zh": "进入图书馆之前，我们必须把手机关掉。", "py": "Jìnrù túshūguǎn zhīqián, wǒmen bìxū bǎ shǒujī guāndiào.", "vi": "Trước khi vào thư viện, chúng ta bắt buộc phải tắt điện thoại." },
+      { "zh": "如果遇到不懂的问题，我会去办公室问老师。", "py": "Rúguǒ yùdào bù dǒng de wèntí, wǒ huì qù bàngōngshì wèn lǎoshī.", "vi": "Nếu gặp vấn đề không hiểu, tôi sẽ đến văn phòng hỏi thầy giáo." },
+      { "zh": "我觉得这是一个提高汉语水平的好办法。", "py": "Wǒ juéde zhè shì yī gè tígāo Hànyǔ shuǐpíng de hǎo bànfǎ.", "vi": "Tôi cảm thấy đây là một cách hay để nâng cao trình độ tiếng Trung." }
+    ],
+    "questions": [
+      { "q": "Trước khi vào thư viện phải làm gì?", "options": ["Ăn no", "Tắt điện thoại", "Hát một bài", "Chuyển nhà"], "answer": 1 },
+      { "q": "Khi gặp câu hỏi không hiểu, người kể chuyện làm gì?", "options": ["Hỏi bạn cùng bàn", "Đến văn phòng hỏi thầy", "Bỏ qua", "Về nhà ngủ"], "answer": 1 },
+      { "q": "Không khí trong thư viện như thế nào?", "options": ["Rất ồn ào", "Vô cùng yên tĩnh", "Rất lạnh", "Rất tối"], "answer": 1 }
+    ]
+  },
+  {
+    "id": "s3_2",
+    "level": 3,
+    "title": "搬家的一天",
+    "titleVi": "Một ngày chuyển nhà",
+    "sentences": [
+      { "zh": "今天我们家搬到了城市的北方。", "py": "Jīntiān wǒmen jiā bāndào le chéngshì de běifāng.", "vi": "Hôm nay nhà chúng tôi đã chuyển đến phía Bắc của thành phố." },
+      { "zh": "新房子比以前大得多，房间也很亮。", "py": "Xīn fángzi bǐ yǐqián dà de duō, fángjiān yě hěn liàng.", "vi": "Ngôi nhà mới rộng hơn trước nhiều, các phòng cũng rất sáng sủa." },
+      { "zh": "早上八点半，几位朋友过来帮忙搬东西。", "py": "Zǎoshang bā diǎn bàn, jǐ wèi péngyou guòlái bāngmáng bān dōngxi.", "vi": "8 giờ rưỡi sáng, vài người bạn sang giúp khuân đồ." },
+      { "zh": "大家一直忙到中午十二点才把包和箱子放好。", "py": "Dàjiā yīzhí máng dào zhōngwǔ shí'èr diǎn cái bǎ bāo hé xiāngzi fàng hǎo.", "vi": "Mọi người bận rộn mãi đến 12 giờ trưa mới xếp xong túi và thùng." },
+      { "zh": "为了表示感谢，爸爸请大家去附近的饭店吃了一顿丰盛的午饭。", "py": "Wèile biǎoshì gǎnxiè, bàba qǐng dàjiā qù fùjìn de fàndiàn chī le yī dùn fēngshèng de wǔfàn.", "vi": "Để bày tỏ lòng cảm ơn, bố mời mọi người ra nhà hàng gần đó ăn một bữa trưa thịnh soạn." }
+    ],
+    "questions": [
+      { "q": "Gia đình chuyển nhà đến hướng nào của thành phố?", "options": ["Phía Nam", "Phía Bắc", "Phía Đông", "Phía Tây"], "answer": 1 },
+      { "q": "Bạn bè đến giúp lúc mấy giờ?", "options": ["7 giờ", "8 giờ rưỡi", "10 giờ", "12 giờ"], "answer": 1 },
+      { "q": "Bố cảm ơn bạn bè bằng cách nào?", "options": ["Tặng sách", "Mời ăn trưa ở nhà hàng", "Tặng tiền", "Hát tặng"], "answer": 1 }
+    ]
+  },
+  {
+    "id": "s4_1",
+    "level": 4,
+    "title": "保护环境的责任",
+    "titleVi": "Trách nhiệm bảo vệ môi trường",
+    "sentences": [
+      { "zh": "随着城市的发展，人们的生活水平提高了，但环境问题也越来越严重。", "py": "Suízhe chéngshì de fāzhǎn, rénmen de shēnghuó shuǐpíng tígāo le, dàn huánjìng wèntí yě yuèláiyuè yánzhòng.", "vi": "Cùng với sự phát triển của đô thị, mức sống của người dân được nâng cao, nhưng vấn đề môi trường cũng ngày càng nghiêm trọng." },
+      { "zh": "为了保护地球，我们每个人都应该从身边的小事做起。", "py": "Wèile bǎohù dìqiú, wǒmen měi gè rén dōu yīnggāi cóng shēnbiān de xiǎoshì zuòqǐ.", "vi": "Để bảo vệ Trái Đất, mỗi người chúng ta đều nên bắt đầu từ những việc nhỏ bên cạnh mình." },
+      { "zh": "比如，出门买东西时自己带包，少用塑料袋；离开房间时按时关灯。", "py": "Bǐrú, chūmén mǎi dōngxi shí zìjǐ dài bāo, shǎo yòng sùliàodài; líkāi fángjiān shí ànshí guāndēng.", "vi": "Ví dụ, khi ra ngoài mua đồ tự mang túi, ít dùng túi nilon; khi rời phòng tắt đèn đúng lúc." },
+      { "zh": "上个月，我们学校组织了一次环保活动，百分之九十的同学都报名参加了。", "py": "Shàng gè yuè, wǒmen xuéxiào zǔzhī le yī cì huánbǎo huódòng, bǎifēnzhī jiǔshí de tóngxué dōu bàomíng cānjiā le.", "vi": "Tháng trước, trường chúng tôi tổ chức một hoạt động bảo vệ môi trường, 90% học sinh đều đã đăng ký tham gia." },
+      { "zh": "大家按照老师的安排，一起打扫了公园，向市民宣传垃圾分类的知识。", "py": "Dàjiā ànzhào lǎoshī de ānpái, yīqǐ dǎsǎo le gōngyuán, xiàng shìmín xuānchuán lājī fēnlèi de zhīshi.", "vi": "Mọi người theo sự sắp xếp của thầy cô, cùng nhau dọn dẹp công viên và tuyên truyền kiến thức phân loại rác cho người dân." },
+      { "zh": "虽然有点累，但看到公园变得干净美丽，大家心里都觉得非常棒。", "py": "Suīrán yǒudiǎn lèi, dàn kàndào gōngyuán biànde gānjìng měilì, dàjiā xīnlǐ dōu juéde fēicháng bàng.", "vi": "Tuy hơi mệt một chút, nhưng nhìn công viên trở nên sạch đẹp, trong lòng mọi người đều cảm thấy vô cùng tuyệt vời." }
+    ],
+    "questions": [
+      { "q": "Bao nhiêu phần trăm học sinh đăng ký hoạt động bảo vệ môi trường?", "options": ["70%", "80%", "90%", "100%"], "answer": 2 },
+      { "q": "Học sinh đã làm gì ở công viên?", "options": ["Chơi bóng rổ", "Dọn dẹp và tuyên truyền phân loại rác", "Biểu diễn ca nhạc", "Bán báo"], "answer": 1 },
+      { "q": "Ví dụ nào được nêu để bảo vệ môi trường?", "options": ["Tự mang túi khi mua đồ", "Mua xe hơi mới", "Đi du lịch xa", "Đọc sách thư viện"], "answer": 0 }
+    ]
+  },
+  {
+    "id": "s4_2",
+    "level": 4,
+    "title": "准时的重要性",
+    "titleVi": "Tầm quan trọng của việc đúng giờ",
+    "sentences": [
+      { "zh": "在现代社会中，按时完成工作和遵守约定是一个人最基本的标准。", "py": "Zài xiàndài shèhuì zhōng, ànshí wánchéng gōngzuò hé zūnshǒu yuēdìng shì yī gè rén zuì jīběn de biāozhǔn.", "vi": "Trong xã hội hiện đại, hoàn thành công việc đúng giờ và giữ lời hẹn là tiêu chuẩn cơ bản nhất của một con người." },
+      { "zh": "如果你总是迟到，不仅会浪费别人的时间，还会让大家觉得你不够认真。", "py": "Rúguǒ nǐ zǒngshì chídào, bùjǐn huì làngfèi biérén de shíjiān, hái huì ràng dàjiā juéde nǐ bù gòu rènzhēn.", "vi": "Nếu bạn lúc nào cũng đến muộn, không chỉ lãng phí thời gian của người khác mà còn khiến mọi người thấy bạn chưa đủ nghiêm túc." },
+      { "zh": "昨天我和朋友约好下午两点在咖啡店见面，可路上突然堵车了。", "py": "Zuótiān wǒ hé péngyou yuē hǎo xiàwǔ liǎng diǎn zài kāfēidiàn jiànmiàn, kě lùshang tūrán dǔchē le.", "vi": "Hôm qua tôi hẹn bạn 2 giờ chiều gặp ở quán cà phê, nhưng trên đường đột nhiên bị tắc đường." },
+      { "zh": "我立刻打电话向他解释，并表示非常抱歉，让他久等了。", "py": "Wǒ lìkè dǎ diànhuà xiàng tā jiěshì, bìng biǎoshì fēicháng bàoqiàn, ràng tā jiǔ děng le.", "vi": "Tôi lập tức gọi điện giải thích với cậu ấy và bày tỏ sự áy náy vì để cậu ấy đợi lâu." },
+      { "zh": "朋友笑着说没关系，只要路上注意安全就好。", "py": "Péngyou xiàozhe shuō méi guānxi, zhǐyào lùshang zhùyì ānquán jiù hǎo.", "vi": "Người bạn cười nói không sao, chỉ cần trên đường chú ý an toàn là được." },
+      { "zh": "从那以后，我每次出门都会提前二十分钟，保证再也不迟到了。", "py": "Cóng nà yǐhòu, wǒ měi cì chūmén dōu huì tíqián èrshí fēnzhōng, bǎozhèng zài yě bù chídào le.", "vi": "Từ sau lần đó, mỗi lần ra ngoài tôi đều đi sớm trước 20 phút, cam đoan không bao giờ đến muộn nữa." }
+    ],
+    "questions": [
+      { "q": "Tại sao nhân vật chính bị đến muộn hôm qua?", "options": ["Ngủ quên", "Tắc đường", "Quên lịch hẹn", "Hỏng xe"], "answer": 1 },
+      { "q": "Người bạn phản ứng thế nào?", "options": ["Tức giận bỏ về", "Nói không sao, chú ý an toàn là được", "Bắt trả tiền cà phê", "Không nghe máy"], "answer": 1 },
+      { "q": "Sau chuyện đó nhân vật chính thay đổi thế nào?", "options": ["Đi sớm trước 20 phút", "Không hẹn gặp nữa", "Mua xe máy", "Chuyển nhà gần quán"], "answer": 0 }
+    ]
+  },
+  {
+    "id": "s5_1",
+    "level": 5,
+    "title": "靠岸的勇气",
+    "titleVi": "Dũng khí cập bến",
+    "sentences": [
+      { "zh": "大学毕业前夕，林浩面临着人生中一次重要的选择：是留在大城市打拼，还是回到家乡发展。", "py": "Dàxué bìyè qiánxī, Lín Hào miànlínzhe rénshēng zhōng yī cì zhòngyào de xuǎnzé: shì liú zài dà chéngshì dǎpīn, háishi huídào jiāxiāng fāzhǎn.", "vi": "Đêm trước ngày tốt nghiệp đại học, Lâm Hạo đối mặt với một lựa chọn quan trọng của đời người: ở lại thành phố lớn phấn đấu hay trở về quê hương phát triển." },
+      { "zh": "起初，他对未来并没有十足的把握，甚至晚上经常失眠。", "py": "Qǐchū, tā duì wèilái bìng méiyǒu shízú de bǎwò, shènzhì wǎnshang jīngcháng shīmián.", "vi": "Ban đầu, cậu không có sự tự tin trọn vẹn về tương lai, thậm chí buổi tối thường xuyên mất ngủ." },
+      { "zh": "在一次傍晚的散步中，父亲耐心地安慰他，告诉他任何决定都包含着风险与机遇。", "py": "Zài yī cì bàngwǎn de sànbù zhōng, fùqīn nàixīn de ānwèi tā, gàosu tā rènhé juédìng dōu bāohánzhe fēngxiǎn yǔ jīyù.", "vi": "Trong một buổi đi dạo lúc chiều tà, người cha kiên nhẫn an ủi cậu, nói với cậu rằng bất kỳ quyết định nào cũng bao hàm rủi ro và cơ hội." },
+      { "zh": "父亲说，青春最宝贵的不是永远不犯错，而是保持积极的心态，勇敢地去尝试。", "py": "Fùqīn shuō, qīngchūn zuì bǎoguì de bù shì yǒngyuǎn bù fàncuò, ér shì bǎochí jījí de xīntài, yǒnggǎn de qù chángshì.", "vi": "Cha nói, điều quý giá nhất của tuổi trẻ không phải là mãi mãi không mắc sai lầm, mà là duy trì tâm thế tích cực và dũng cảm thử sức." },
+      { "zh": "听完父亲的话，林浩终于解开了心结，决定先去一家科技公司办理入职手续，积累宝贵的工作经验。", "py": "Tīngwán fùqīn de huà, Lín Hào zhōngyú jiěkāi le xīnjié, juédìng xiān qù yī jiā kējì gōngsī bànlǐ rùzhí shǒuxù, jīlěi bǎoguì de gōngzuò jīngyàn.", "vi": "Nghe xong lời cha, Lâm Hạo cuối cùng đã cởi bỏ được nút thắt trong lòng, quyết định trước tiên đến một công ty công nghệ làm thủ tục nhận việc để tích lũy kinh nghiệm quý báu." },
+      { "zh": "他把父亲写给他的那封信作为宝贝一样保存起来，每当遇到困难时就会拿出来读一读。", "py": "Tā bǎ fùqīn xiě gěi tā de nà fēng xìn zuòwéi bǎobèi yīyàng bǎocún qǐlái, měidāng yùdào kùnnan shí jiù huì náchūlái dú yī dú.", "vi": "Cậu cất giữ bức thư cha viết cho mình như một báu vật, mỗi khi gặp khó khăn lại lấy ra đọc." },
+      { "zh": "正如海上的船只终究要安全地靠岸一样，只要方向正确，每一步努力都不会白费。", "py": "Zhèngrú hǎishàng de chuánzhī zhōngjiū yào ānquán de kào àn yīyàng, zhǐyào fāngxiàng zhèngquè, měi yī bù nǔlì dōu bù huì báifèi.", "vi": "Cũng giống như con thuyền trên biển rốt cuộc sẽ cập bến an toàn, chỉ cần đúng hướng thì mọi bước nỗ lực đều không uổng phí." }
+    ],
+    "questions": [
+      { "q": "Lâm Hạo phân vân điều gì trước khi tốt nghiệp?", "options": ["Ở lại thành phố lớn hay về quê", "Học tiếp thạc sĩ hay đi du lịch", "Mua nhà hay mua xe", "Đổi chuyên ngành"], "answer": 0 },
+      { "q": "Theo người cha, điều gì quý giá nhất của tuổi trẻ?", "options": ["Kiếm thật nhiều tiền", "Duy trì tâm thế tích cực và dám thử sức", "Không bao giờ mắc lỗi", "Sống an nhàn"], "answer": 1 },
+      { "q": "Lâm Hạo đã làm gì với bức thư của cha?", "options": ["Gửi trả lại", "Cất giữ như báu vật để đọc khi khó khăn", "Đăng lên báo", "Tặng cho bạn"], "answer": 1 }
+    ]
+  },
+  {
+    "id": "s5_2",
+    "level": 5,
+    "title": "社区里的爱心驿站",
+    "titleVi": "Trạm dừng chân nhân ái trong khu phố",
+    "sentences": [
+      { "zh": "在我们居住的社区门口，有一个由志愿者共同建立的“爱心驿站”。", "py": "Zài wǒmen jūzhù de shèqū ménkǒu, yǒu yī gè yóu zhìyuànzhě gòngtóng jiànlì de 'àixīn yìzhàn'.", "vi": "Ở cổng khu dân cư nơi chúng tôi sinh sống, có một 'Trạm dừng chân nhân ái' do các tình nguyện viên cùng nhau xây dựng." },
+      { "zh": "驿站里安装了空调和饮水机，桌子上整齐地摆放着急救药品、雨伞和各种书籍。", "py": "Yìzhàn lǐ ānzhuāng le kōngtiáo hé yǐnshuǐjī, zhuōzi shàng zhěngqí de bǎifàngzhe jíjiù yàopǐn, yǔsǎn hé gèzhǒng shūjí.", "vi": "Trong trạm có lắp điều hòa và máy lọc nước, trên bàn bày biện ngay ngắn thuốc sơ cứu, ô che mưa và đủ loại sách báo." },
+      { "zh": "无论是环卫工人还是快递小哥，累了都可以进来歇歇脚、喝口水。", "py": "Wúlùn shì huánwèi gōngrén háishi kuàidì xiǎogē, lèi le dōu kěyǐ jìnlái xiēxie jiǎo, hē kǒu shuǐ.", "vi": "Bất kể là công nhân vệ sinh môi trường hay anh giao hàng, hễ mệt đều có thể vào nghỉ chân, uống ngụm nước." },
+      { "zh": "居民们也经常把家里多余的衣物打包成包裹送到这里，帮助有需要的人。", "py": "Jūmínmen yě jīngcháng bǎ jiālǐ duōyú de yīwù dǎbāo chéng bāoguǒ sòngdào zhèlǐ, bāngzhù yǒu xūyào de rén.", "vi": "Người dân cũng thường xuyên đóng gói quần áo dư dùng ở nhà thành bưu kiện mang tới đây để giúp đỡ những người cần." },
+      { "zh": "大家不仅爱护驿站里的每一件公共物品，还主动轮流打扫卫生。", "py": "Dàjiā bùjǐn àihù yìzhàn lǐ de měi yī jiàn gōnggòng wùpǐn, hái zhǔdòng lúnliú dǎsǎo wèishēng.", "vi": "Mọi người không chỉ giữ gìn từng món đồ công cộng trong trạm mà còn chủ động thay phiên nhau dọn dẹp vệ sinh." },
+      { "zh": "这个小小的空间虽然看起来很普通，却保留了人与人之间最温暖的情感。", "py": "Zhège xiǎoxiǎo de kōngjiān suīrán kànqǐlái hěn pǔtōng, què bǎoliú le rén yǔ rén zhījiān zuì wēnnuǎn de qínggǎn.", "vi": "Không gian nhỏ bé này tuy trông rất bình dị, nhưng lại lưu giữ được tình cảm ấm áp nhất giữa người với người." }
+    ],
+    "questions": [
+      { "q": "Trong trạm nhân ái có lắp đặt thiết bị gì?", "options": ["Tivi và tủ lạnh", "Điều hòa và máy lọc nước", "Máy tính và máy in", "Bếp điện"], "answer": 1 },
+      { "q": "Người dân thường đóng góp gì cho trạm?", "options": ["Đóng gói quần áo dư dùng thành bưu kiện", "Tiền mặt", "Xe đạp cũ", "Hoa tươi"], "answer": 0 },
+      { "q": "Ai có thể vào trạm nghỉ chân?", "options": ["Chỉ trẻ em", "Công nhân vệ sinh, giao hàng và người mệt mỏi", "Chỉ tình nguyện viên", "Khách du lịch nước ngoài"], "answer": 1 }
+    ]
+  }
+]

@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="light" data-world="1">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+  <meta name="theme-color" content="#b91c1c" />
+  <meta name="description" content="Long Môn HSK - Web game học tiếng Trung HSK1-HSK5 nhớ nhanh nhớ lâu" />
+  <title>Long Môn HSK — Học Tiếng Trung Qua Trò Chơi</title>
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="stylesheet" href="./css/style.css" />
+  <!-- Thư viện ngoài: pinyin-pro & Hanzi Writer (CDN với fallback nội bộ) -->
+  <script src="https://unpkg.com/pinyin-pro@3.26.0/dist/index.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.5/dist/hanzi-writer.min.js" defer></script>
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <!-- Thanh trạng thái trên cùng -->
+    <header class="topbar" role="banner">
+      <div class="brand" id="btn-home" role="button" tabindex="0" aria-label="Về trang chủ">
+        <span class="brand-logo" aria-hidden="true">🐉</span>
+        <div class="brand-info">
+          <span class="brand-title">Long Môn HSK</span>
+          <span class="player-level" id="ui-level">Cấp 1 · Tân Thủ</span>
+        </div>
+      </div>
+
+      <div class="xp-bar-wrap" title="Tiến độ kinh nghiệm">
+        <div class="xp-bar-fill" id="ui-xp-bar" style="width: 0%"></div>
+        <span class="xp-bar-text" id="ui-xp-text">0 / 100 XP</span>
+      </div>
+
+      <div class="stats-pills">
+        <span class="pill pill-streak" id="ui-streak" title="Chuỗi ngày học">🔥 0</span>
+        <span class="pill pill-freeze" id="ui-freeze" title="Băng bảo vệ streak">❄️ 1</span>
+        <span class="pill pill-coins" id="ui-coins" title="Xu Long Châu">🪙 0</span>
+      </div>
+    </header>
+
+    <!-- Vùng hiển thị chính -->
+    <main id="main-view" class="main-view" role="main" aria-live="polite">
+      <div class="loading-screen">
+        <div class="spinner"></div>
+        <p>Đang đánh thức Rồng Con & nạp kho từ vựng...</p>
+      </div>
+    </main>
+
+    <!-- Nút Sư Phụ AI nổi (chỉ hiện khi phát hiện backend /api/chat hoạt động) -->
+    <button id="btn-ai-tutor" class="fab-tutor hidden" aria-label="Hỏi Sư Phụ AI" title="Hỏi Sư Phụ AI">
+      🧙‍♂️ <span>Hỏi Sư Phụ</span>
+    </button>
+
+    <!-- Thanh điều hướng dưới cùng (Mobile-first) -->
+    <nav class="bottom-nav" role="navigation" aria-label="Điều hướng chính">
+      <button class="nav-btn active" data-tab="home" aria-label="Trang chủ">
+        <span class="nav-icon">🏯</span><span class="nav-label">Trang chủ</span>
+      </button>
+      <button class="nav-btn" data-tab="map" aria-label="Hành trình">
+        <span class="nav-icon">🗺️</span><span class="nav-label">Hành trình</span>
+      </button>
+      <button class="nav-btn" data-tab="arcade" aria-label="Chế độ chơi">
+        <span class="nav-icon">🎮</span><span class="nav-label">Luyện tập</span>
+      </button>
+      <button class="nav-btn" data-tab="vocab" aria-label="Sổ từ">
+        <span class="nav-icon">📜</span><span class="nav-label">Sổ từ</span>
+      </button>
+      <button class="nav-btn" data-tab="stats" aria-label="Thống kê">
+        <span class="nav-icon">📊</span><span class="nav-label">Thống kê</span>
+      </button>
+      <button class="nav-btn" data-tab="profile" aria-label="Hồ sơ & Cài đặt">
+        <span class="nav-icon">🏅</span><span class="nav-label">Hồ sơ</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- Modal dùng chung (Popup từ vựng, Sư phụ AI, Quyền riêng tư) -->
+  <div id="modal-backdrop" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <button id="modal-close" class="modal-close" aria-label="Đóng">✕</button>
+      <div id="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Canvas hiệu ứng pháo hoa -->
+  <canvas id="confetti-canvas" class="confetti-canvas" aria-hidden="true"></canvas>
+
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>
