@@ -6,6 +6,7 @@ import { tts } from './audio/tts.js';
 
 const LEVELS = [1, 2, 3, 4, 5, 6, 7];
 const levelLabel = (l) => (l === 7 ? 'HSK 7-9' : `HSK ${l}`);
+const AVATARS = ['🐉', '🐼', '🐯', '🦊', '🦁', '🐰', '🦅', '🦄'];
 
 let aiEnabled = false;
 let currentTab = 'home';
@@ -26,6 +27,14 @@ function updateTopbar() {
   document.getElementById('ui-level').textContent = `Cấp ${lvl} · ${levelLabel(p.activeWorld)}`;
   document.getElementById('ui-streak').textContent = `🔥 ${p.streak}`;
   document.getElementById('ui-coins').textContent = `🪙 ${p.coins}`;
+  document.getElementById('ui-user-badge').textContent = `${p.avatar || '🐼'} ${p.name}`;
+
+  const sideAuthBtn = document.getElementById('btn-auth-sidebar');
+  if (sideAuthBtn) {
+    sideAuthBtn.innerHTML = store.currentUsername
+      ? `<span>${p.avatar || '🐼'}</span> <span class="side-txt">${p.name}</span>`
+      : `<span>👤</span> <span class="side-txt">ĐĂNG NHẬP / ĐĂNG KÝ</span>`;
+  }
   document.documentElement.setAttribute('data-theme', store.state.settings.theme);
 }
 
@@ -37,6 +46,144 @@ function closeModal() {
   document.getElementById('modal-backdrop').classList.add('hidden');
 }
 
+// ==========================================
+// 1. HỆ THỐNG ĐĂNG NHẬP & ĐĂNG KÝ NHIỀU NGƯỜI DÙNG
+// ==========================================
+function openAuthModal(defaultMode = 'login') {
+  const accounts = store.accounts || [];
+  let selectedAvatar = '🐉';
+
+  const renderAuth = (mode) => {
+    openModal(`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-right:32px">
+        <h3 class="card-title" style="margin:0">👤 Tài Khoản Học Viên (${accounts.length}/10 chỗ)</h3>
+        ${store.currentUsername ? `<button class="btn btn-outline btn-sm" id="btn-logout-now">Đăng xuất</button>` : ''}
+      </div>
+
+      ${accounts.length > 0 ? `
+        <div style="margin-bottom:14px">
+          <div style="font-size:0.8rem;font-weight:700;color:var(--text-muted);margin-bottom:6px">Tài khoản đã đăng ký trên máy này (bấm để chuyển nhanh):</div>
+          <div style="display:flex;flex-direction:column;gap:6px;max-height:160px;overflow-y:auto">
+            ${accounts.map((acc) => {
+              const isCurrent = acc.username === store.currentUsername;
+              return `
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-radius:10px;border:1.5px solid ${isCurrent ? 'var(--primary)' : 'var(--border)'};background:var(--surface-alt)">
+                  <div>
+                    <strong>${acc.avatar} ${acc.displayName}</strong> <span style="font-size:0.78rem;color:var(--text-muted)">(@${acc.username})</span>
+                    <div style="font-size:0.75rem;color:var(--primary)">Cấp ${acc.level || 1} · ${acc.xp || 0} XP</div>
+                  </div>
+                  <div style="display:flex;gap:6px">
+                    ${isCurrent
+                      ? `<span class="badge-pill" style="background:var(--primary);color:#fff">Đang học</span>`
+                      : `<button class="btn btn-primary btn-sm" data-switch-acc="${acc.username}">Vào học</button>`}
+                    <button class="btn btn-outline btn-sm" data-del-acc="${acc.username}" title="Xóa tài khoản">🗑️</button>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      ` : ''}
+
+      <div style="display:flex;gap:8px;margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:10px">
+        <button class="btn ${mode === 'login' ? 'btn-primary' : 'btn-outline'} btn-sm" style="flex:1" id="tab-mode-login">🔑 Đăng nhập</button>
+        <button class="btn ${mode === 'register' ? 'btn-primary' : 'btn-outline'} btn-sm" style="flex:1" id="tab-mode-reg">✨ Đăng ký tài khoản mới</button>
+      </div>
+
+      ${mode === 'login' ? `
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <input type="text" id="auth-user" placeholder="Tên đăng nhập (ví dụ: letieu, minhanh...)" />
+          <input type="password" id="auth-pass" placeholder="Mật khẩu..." />
+          <div id="auth-err" style="color:#dc2626;font-size:0.82rem;font-weight:600"></div>
+          <button class="btn btn-primary btn-block" id="btn-submit-login">Đăng nhập vào học</button>
+        </div>
+      ` : `
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="font-size:0.82rem;font-weight:700">Chọn biểu tượng đại diện:</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            ${AVATARS.map((av) => `<button type="button" class="btn btn-outline btn-sm" data-pick-av="${av}" style="font-size:1.2rem;border-color:${av === selectedAvatar ? 'var(--primary)' : 'var(--border)'}">${av}</button>`).join('')}
+          </div>
+          <input type="text" id="reg-name" placeholder="Tên hiển thị (VD: Lê Tiêu, Nguyễn Văn A...)" />
+          <input type="text" id="reg-user" placeholder="Tên đăng nhập viết liền không dấu (VD: letieu01)" />
+          <input type="password" id="reg-pass" placeholder="Mật khẩu (tối thiểu 4 ký tự)" />
+          <div id="auth-err" style="color:#dc2626;font-size:0.82rem;font-weight:600"></div>
+          <button class="btn btn-green btn-block" id="btn-submit-reg">🚀 Tạo tài khoản & Bắt đầu học</button>
+        </div>
+      `}
+    `);
+
+    document.getElementById('tab-mode-login').onclick = () => renderAuth('login');
+    document.getElementById('tab-mode-reg').onclick = () => renderAuth('register');
+
+    if (document.getElementById('btn-logout-now')) {
+      document.getElementById('btn-logout-now').onclick = () => {
+        store.logout();
+        updateTopbar();
+        closeModal();
+        renderView(currentTab);
+      };
+    }
+
+    document.querySelectorAll('[data-switch-acc]').forEach((b) => {
+      b.onclick = () => {
+        store.quickSwitch(b.dataset.switchAcc);
+        updateTopbar();
+        closeModal();
+        renderView(currentTab);
+      };
+    });
+
+    document.querySelectorAll('[data-del-acc]').forEach((b) => {
+      b.onclick = () => {
+        if (confirm(`Xóa vĩnh viễn tài khoản @${b.dataset.delAcc}?`)) {
+          store.deleteAccount(b.dataset.delAcc);
+          updateTopbar();
+          renderAuth(mode);
+          renderView(currentTab);
+        }
+      };
+    });
+
+    document.querySelectorAll('[data-pick-av]').forEach((b) => {
+      b.onclick = () => {
+        selectedAvatar = b.dataset.pickAv;
+        document.querySelectorAll('[data-pick-av]').forEach((x) => { x.style.borderColor = 'var(--border)'; });
+        b.style.borderColor = 'var(--primary)';
+      };
+    });
+
+    if (document.getElementById('btn-submit-login')) {
+      document.getElementById('btn-submit-login').onclick = () => {
+        const u = document.getElementById('auth-user').value;
+        const p = document.getElementById('auth-pass').value;
+        const res = store.login(u, p);
+        if (!res.ok) { document.getElementById('auth-err').textContent = res.error; return; }
+        updateTopbar();
+        closeModal();
+        renderView(currentTab);
+      };
+    }
+
+    if (document.getElementById('btn-submit-reg')) {
+      document.getElementById('btn-submit-reg').onclick = () => {
+        const displayName = document.getElementById('reg-name').value;
+        const username = document.getElementById('reg-user').value;
+        const password = document.getElementById('reg-pass').value;
+        const res = store.register({ username, password, displayName, avatar: selectedAvatar });
+        if (!res.ok) { document.getElementById('auth-err').textContent = res.error; return; }
+        updateTopbar();
+        closeModal();
+        renderView(currentTab);
+      };
+    }
+  };
+
+  renderAuth(defaultMode);
+}
+
+// ==========================================
+// 2. SƯ PHỤ AI TOÀN DIỆN
+// ==========================================
 function openAITutorModal() {
   openModal(`
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
@@ -122,7 +269,7 @@ function openCreateDeckModal(onDone) {
   };
 }
 
-async function startQuickQuiz(words, title = 'Luyện tập từ vựng') {
+async function startQuickQuiz(words, title = 'Luyện tập từ vựng', returnTab = 'home') {
   if (!words || !words.length) return alert('Chưa có từ vựng trong mục này!');
   const all = await dataLoader.getAllLoadedWords();
   let idx = 0, score = 0;
@@ -138,9 +285,9 @@ async function startQuickQuiz(words, title = 'Luyện tập từ vựng') {
         <div class="card" style="text-align:center;max-width:520px;margin:0 auto">
           <h2>🎉 Hoàn thành: ${title}!</h2>
           <p>Đúng <strong>${score}/${words.length}</strong> câu · Nhận <strong>+${score * 15} XP</strong> & <strong>+${score * 3} 🪙</strong></p>
-          <button class="btn btn-primary btn-block" id="btn-back-home">Quay lại Dashboard</button>
+          <button class="btn btn-primary btn-block" id="btn-back-tab">Tiếp tục hành trình</button>
         </div>`;
-      document.getElementById('btn-back-home').onclick = () => switchTab('home');
+      document.getElementById('btn-back-tab').onclick = () => switchTab(returnTab);
       return;
     }
     const target = words[idx];
@@ -179,6 +326,9 @@ async function startQuickQuiz(words, title = 'Luyện tập từ vựng') {
   renderQ();
 }
 
+// ==========================================
+// 3. CÁC MÀN HÌNH CHÍNH (HOME, HÀNH TRÌNH BÀI BẢN, SỔ TỪ PHÂN PHẦN)
+// ==========================================
 async function renderView(tab) {
   const main = document.getElementById('main-view');
   const p = store.state.profile;
@@ -187,57 +337,69 @@ async function renderView(tab) {
   const fresh = getNewWords(allWords, p.activeWorld, 8);
   const customDecks = store.state.customDecks || [];
 
-  if (tab === 'home' || tab === 'vocab') {
+  if (tab === 'home') {
+    // Xây dựng Bảng xếp hạng kết hợp người dùng thật trên máy + học viên mẫu
+    const realPlayers = (store.accounts || []).map((a) => ({
+      name: `${a.displayName} (@${a.username})`,
+      avatar: a.avatar || '🐉',
+      lv: a.level || 1,
+      xp: a.xp || 0,
+      isReal: true
+    }));
+    const demoPlayers = [
+      { name: 'Minh Anh', avatar: '🐯', lv: 24, xp: 2810, isReal: false },
+      { name: 'Thảo Nhi', avatar: '🦊', lv: 17, xp: 2090, isReal: false },
+      { name: 'Hoàng Nam', avatar: '🐰', lv: 15, xp: 1950, isReal: false }
+    ];
+    const leaderboard = [...realPlayers, ...demoPlayers].sort((a, b) => b.xp - a.xp).slice(0, 6);
+
     main.innerHTML = `
-      <!-- BANNER ĐẦU TRANG GIỐNG BAOLINGO -->
       <div class="page-hero">
         <div class="hero-left">
-          <div class="mascot-avatar">🐼</div>
+          <div class="mascot-avatar">${p.avatar || '🐼'}</div>
           <div>
-            <h1 class="hero-title">Học Từ Vựng Tiếng Trung</h1>
-            <p class="hero-sub">Nắm vững <strong>${allWords.length.toLocaleString()}</strong> từ vựng HSK 1–9 với hệ thống lặp lại ngắt quãng (SRS) thông minh</p>
+            <h1 class="hero-title">Xin chào, ${p.name}!</h1>
+            <p class="hero-sub">Kho từ vựng <strong>${allWords.length.toLocaleString()}</strong> từ (HSK 1–9) · ${store.currentUsername ? 'Đã đồng bộ tiến độ tài khoản' : 'Chế độ Khách (nên đăng ký tài khoản để lưu tiến độ riêng)'}</p>
           </div>
         </div>
         <div class="hero-btns">
-          <button class="btn btn-primary" id="btn-hero-vocab">📖 Sổ tay từ vựng</button>
-          <button class="btn btn-green" id="btn-hero-game">🎮 Trò Chơi</button>
-          <button class="btn btn-outline" id="btn-hero-srs">❓ Spaced Repetition là gì?</button>
+          <button class="btn btn-primary" id="btn-hero-journey">🗺️ Vào Hành Trình</button>
+          <button class="btn btn-green" id="btn-hero-vocab">📜 Mở Sổ Từ</button>
+          <button class="btn btn-outline" id="btn-hero-auth">👤 Tài khoản (${store.accounts.length}/10)</button>
         </div>
       </div>
 
-      <!-- BỐ CỤC 2 CỘT CHÍNH -->
       <div class="two-col-grid">
-        <!-- CỘT TRÁI: BẢNG XẾP HẠNG & TIẾN ĐỘ -->
         <div style="display:flex;flex-direction:column;gap:16px">
           <div class="card">
             <div class="card-header">
-              <h3 class="card-title">🏆 BẢNG XẾP HẠNG</h3>
+              <h3 class="card-title">🏆 BẢNG XẾP HẠNG HỌC VIÊN</h3>
               <span class="badge-pill">Tháng 11/2026</span>
             </div>
-            <div style="text-align:center;font-size:0.84rem;font-weight:700;color:var(--primary)">🎁 Phần thưởng hàng tháng</div>
             <div class="podium-row">
               <div class="podium-item"><div class="podium-circle">🥇</div><span>#1</span></div>
               <div class="podium-item"><div class="podium-circle">🥈</div><span>#2</span></div>
               <div class="podium-item"><div class="podium-circle">🥉</div><span>#3</span></div>
-              <div class="podium-item"><div class="podium-circle">🐉</div><span>Bạn</span></div>
+              <div class="podium-item"><div class="podium-circle">${p.avatar || '🐼'}</div><span>Bạn</span></div>
             </div>
             <div class="rank-list">
-              <div class="rank-row"><span>🐼 <strong>Lê Tiêu (Bạn)</strong> · Lv.${Math.floor(p.xp / 100) + 1}</span><span class="rank-badge">${p.xp} XP</span></div>
-              <div class="rank-row"><span>🐯 Minh Anh · Lv.24</span><span class="badge-pill">2.810 XP</span></div>
-              <div class="rank-row"><span>🦊 Thảo Nhi · Lv.17</span><span class="badge-pill">2.090 XP</span></div>
-              <div class="rank-row"><span>🐰 Hoàng Nam · Lv.15</span><span class="badge-pill">1.950 XP</span></div>
+              ${leaderboard.map((u, idx) => `
+                <div class="rank-row" style="${u.isReal ? 'border:1px solid var(--primary);' : ''}">
+                  <span><strong>#${idx + 1}</strong> ${u.avatar} ${u.name} · Lv.${u.lv}</span>
+                  <span class="rank-badge">${u.xp} XP</span>
+                </div>
+              `).join('')}
             </div>
           </div>
 
           <div class="card">
-            <h3 class="card-title">🎯 Chọn Cấp Độ Luyện Tập</h3>
+            <h3 class="card-title">🎯 Chọn Cấp Độ Đang Luyện</h3>
             <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px">
               ${LEVELS.map((l) => `<button class="btn ${p.activeWorld === l ? 'btn-primary' : 'btn-outline'} btn-sm" data-set-world="${l}">${levelLabel(l)}</button>`).join('')}
             </div>
           </div>
         </div>
 
-        <!-- CỘT PHẢI: BỘ THẺ CỦA TÔI + BỘ TỪ VỰNG PHỔ BIẾN HSK 1-9 -->
         <div style="display:flex;flex-direction:column;gap:16px">
           <div class="card">
             <div class="card-header">
@@ -248,7 +410,7 @@ async function renderView(tab) {
               <div style="text-align:center;padding:24px 12px;background:var(--bg);border-radius:14px;border:1px dashed var(--border)">
                 <div style="font-size:2rem;margin-bottom:6px">📁</div>
                 <div style="font-weight:700">Chưa có bộ thẻ cá nhân nào</div>
-                <p style="font-size:0.84rem;color:var(--text-muted);margin:4px 0 12px">Tạo bộ thẻ đầu tiên để quản lý từ vựng chuyên ngành hoặc giao tiếp của bạn</p>
+                <p style="font-size:0.84rem;color:var(--text-muted);margin:4px 0 12px">Tạo bộ thẻ đầu tiên để lưu từ vựng chuyên ngành hoặc giao tiếp của riêng bạn</p>
                 <button class="btn btn-primary btn-sm" id="btn-create-deck-empty">+ Tạo Bộ Thẻ Đầu Tiên</button>
               </div>
             ` : `
@@ -268,22 +430,23 @@ async function renderView(tab) {
 
           <div class="card">
             <div class="card-header">
-              <h3 class="card-title">✨ BỘ TỪ VỰNG PHỔ BIẾN (HSK 1 – HSK 9)</h3>
+              <h3 class="card-title">✨ LỘ TRÌNH CÁC CẤP ĐỘ (HSK 1 – HSK 9)</h3>
               <button class="btn btn-gold btn-sm" id="btn-quick-review">🔁 Ôn tập (${due.length})</button>
             </div>
             <div class="deck-grid">
               ${LEVELS.map((l) => {
-                const cnt = allWords.filter((w) => w.level === l).length;
+                const lvlWords = allWords.filter((w) => w.level === l);
+                const learnedCnt = lvlWords.filter((w) => store.state.srs[w.hanzi]).length;
                 return `
-                  <div class="deck-card" data-learn-level="${l}">
+                  <div class="deck-card" data-open-journey="${l}">
                     <div>
                       <div style="display:flex;justify-content:space-between;align-items:center">
-                        <strong style="color:var(--primary)">Bộ từ ${levelLabel(l)}</strong>
-                        <span class="badge-pill">${cnt.toLocaleString()} từ</span>
+                        <strong style="color:var(--primary)">${levelLabel(l)}</strong>
+                        <span class="badge-pill">${learnedCnt}/${lvlWords.length} từ</span>
                       </div>
-                      <p style="font-size:0.8rem;color:var(--text-muted);margin:6px 0 0">Từ vựng chuẩn quốc tế kèm phát âm bản xứ & trắc nghiệm</p>
+                      <p style="font-size:0.8rem;color:var(--text-muted);margin:6px 0 0">Chia thành ${Math.ceil(lvlWords.length / 50)} chương học bài bản</p>
                     </div>
-                    <button class="btn btn-primary btn-sm btn-block">⚡ Luyện 8 từ mới</button>
+                    <button class="btn btn-primary btn-sm btn-block">🗺️ Học theo lộ trình</button>
                   </div>
                 `;
               }).join('')}
@@ -293,56 +456,213 @@ async function renderView(tab) {
       </div>
     `;
 
+    document.getElementById('btn-hero-journey').onclick = () => switchTab('journey');
     document.getElementById('btn-hero-vocab').onclick = () => switchTab('practice');
-    document.getElementById('btn-hero-game').onclick = () => switchTab('arena');
-    document.getElementById('btn-hero-srs').onclick = () => openModal(`
-      <h3 class="card-title">🧠 Spaced Repetition (Lặp lại ngắt quãng) là gì?</h3>
-      <p>Hệ thống tự động ghi nhớ từ nào bạn hay quên để nhắc ôn lại đúng thời điểm vàng trước khi rơi rụng, giúp ghi nhớ sâu hàng nghìn chữ Hán mà không cần học nhồi nhét.</p>
-    `);
-    document.getElementById('btn-create-deck').onclick = () => openCreateDeckModal(() => renderView(tab));
+    document.getElementById('btn-hero-auth').onclick = () => openAuthModal('login');
+    document.getElementById('btn-create-deck').onclick = () => openCreateDeckModal(() => renderView('home'));
     if (document.getElementById('btn-create-deck-empty')) {
-      document.getElementById('btn-create-deck-empty').onclick = () => openCreateDeckModal(() => renderView(tab));
+      document.getElementById('btn-create-deck-empty').onclick = () => openCreateDeckModal(() => renderView('home'));
     }
-    document.getElementById('btn-quick-review').onclick = () => startQuickQuiz(due.length ? due : fresh, 'Ôn tập SRS');
+    document.getElementById('btn-quick-review').onclick = () => startQuickQuiz(due.length ? due : fresh, 'Ôn tập SRS', 'home');
     document.querySelectorAll('[data-set-world]').forEach((b) => {
-      b.onclick = () => { p.activeWorld = Number(b.dataset.setWorld); store.save(); updateTopbar(); renderView(tab); };
+      b.onclick = () => { p.activeWorld = Number(b.dataset.setWorld); store.save(); updateTopbar(); renderView('home'); };
     });
-    document.querySelectorAll('[data-learn-level]').forEach((card) => {
+    document.querySelectorAll('[data-open-journey]').forEach((card) => {
       card.onclick = () => {
-        const lvl = Number(card.dataset.learnLevel);
-        startQuickQuiz(getNewWords(allWords, lvl, 8), `Từ mới ${levelLabel(lvl)}`);
+        p.activeWorld = Number(card.dataset.openJourney);
+        store.save();
+        updateTopbar();
+        switchTab('journey');
       };
     });
     document.querySelectorAll('[data-play-deck]').forEach((card) => {
       card.onclick = () => {
         const deck = customDecks.find((d) => String(d.id) === card.dataset.playDeck);
-        if (deck) startQuickQuiz(deck.words, deck.title);
+        if (deck) startQuickQuiz(deck.words, deck.title, 'home');
       };
     });
+
+  // ==========================================
+  // 4. HÀNH TRÌNH BÀI BẢN (CHIA CẤP ĐỘ -> CHƯƠNG -> BÀI HỌC 10 TỪ)
+  // ==========================================
+  } else if (tab === 'journey') {
+    let selectedChapter = 0;
+
+    const renderJourney = () => {
+      const levelWords = allWords.filter((w) => w.level === p.activeWorld);
+      const chapterSize = 50; // Mỗi chương gồm 50 từ (5 bài học nhỏ, mỗi bài 10 từ)
+      const totalChapters = Math.max(1, Math.ceil(levelWords.length / chapterSize));
+      if (selectedChapter >= totalChapters) selectedChapter = 0;
+
+      const chapterWords = levelWords.slice(selectedChapter * chapterSize, (selectedChapter + 1) * chapterSize);
+      const lessonsCount = Math.ceil(chapterWords.length / 10);
+      const totalLearnedInLevel = levelWords.filter((w) => store.state.srs[w.hanzi]).length;
+
+      main.innerHTML = `
+        <div class="page-hero">
+          <div>
+            <h1 class="hero-title">🗺️ Hành Trình Chinh Phục ${levelLabel(p.activeWorld)}</h1>
+            <p class="hero-sub">Tiến độ cấp độ: đã học <strong>${totalLearnedInLevel}/${levelWords.length.toLocaleString()}</strong> từ · Chia thành <strong>${totalChapters} Chương</strong> bài bản</p>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px">
+            ${LEVELS.map((l) => `<button class="btn ${p.activeWorld === l ? 'btn-primary' : 'btn-outline'} btn-sm" data-j-lvl="${l}">${levelLabel(l)}</button>`).join('')}
+          </div>
+        </div>
+
+        <div class="two-col-grid">
+          <!-- CỘT TRÁI: DANH SÁCH CHƯƠNG -->
+          <div class="card">
+            <h3 class="card-title" style="margin-bottom:10px">📚 Danh Sách Chương (${totalChapters} chương)</h3>
+            <div style="display:flex;flex-direction:column;gap:6px;max-height:62dvh;overflow-y:auto">
+              ${Array.from({ length: totalChapters }, (_, cIdx) => {
+                const slice = levelWords.slice(cIdx * chapterSize, (cIdx + 1) * chapterSize);
+                const done = slice.filter((w) => store.state.srs[w.hanzi]).length;
+                const isAct = cIdx === selectedChapter;
+                return `
+                  <button class="btn ${isAct ? 'btn-primary' : 'btn-outline'}" style="justify-content:space-between;width:100%" data-chap="${cIdx}">
+                    <span>Chương ${cIdx + 1} (Từ ${cIdx * chapterSize + 1}–${cIdx * chapterSize + slice.length})</span>
+                    <span class="badge-pill" style="${isAct ? 'color:#1e293b' : ''}">${done}/${slice.length}</span>
+                  </button>
+                `;
+              }).join('')}
+            </div>
+          </div>
+
+          <!-- CỘT PHẢI: CÁC BÀI HỌC TRONG CHƯƠNG ĐANG CHỌN -->
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">🏯 Chương ${selectedChapter + 1} · Các Bài Học Chi Tiết</h3>
+              <button class="btn btn-gold btn-sm" id="btn-test-chapter">🎯 Kiểm tra tổng hợp Chương ${selectedChapter + 1}</button>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:12px">
+              ${Array.from({ length: lessonsCount }, (_, lIdx) => {
+                const lessonWords = chapterWords.slice(lIdx * 10, (lIdx + 1) * 10);
+                const doneCnt = lessonWords.filter((w) => store.state.srs[w.hanzi]).length;
+                const pct = Math.round((doneCnt / Math.max(1, lessonWords.length)) * 100);
+                return `
+                  <div style="padding:14px;border:1.5px solid var(--border);border-radius:14px;background:var(--bg)">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                      <strong>Bài ${lIdx + 1}: ${lessonWords.slice(0, 4).map((x) => x.hanzi).join(' · ')}...</strong>
+                      <span class="badge-pill">${doneCnt}/${lessonWords.length} từ (${pct}%)</span>
+                    </div>
+                    <div style="height:8px;background:var(--border);border-radius:999px;overflow:hidden;margin-bottom:10px">
+                      <div style="height:100%;width:${pct}%;background:var(--green)"></div>
+                    </div>
+                    <div style="display:flex;gap:8px">
+                      <button class="btn btn-outline btn-sm" data-preview-lesson="${lIdx}">👁️ Xem 10 từ trước</button>
+                      <button class="btn btn-primary btn-sm" data-study-lesson="${lIdx}">▶️ Vào học & Luyện tập</button>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.querySelectorAll('[data-j-lvl]').forEach((b) => {
+        b.onclick = () => {
+          p.activeWorld = Number(b.dataset.jLvl);
+          selectedChapter = 0;
+          store.save();
+          updateTopbar();
+          renderJourney();
+        };
+      });
+      document.querySelectorAll('[data-chap]').forEach((b) => {
+        b.onclick = () => { selectedChapter = Number(b.dataset.chap); renderJourney(); };
+      });
+      document.getElementById('btn-test-chapter').onclick = () => {
+        startQuickQuiz(chapterWords.slice(0, 15), `Kiểm tra Chương ${selectedChapter + 1} (${levelLabel(p.activeWorld)})`, 'journey');
+      };
+      document.querySelectorAll('[data-study-lesson]').forEach((b) => {
+        b.onclick = () => {
+          const i = Number(b.dataset.studyLesson);
+          const lw = chapterWords.slice(i * 10, (i + 1) * 10);
+          startQuickQuiz(lw, `${levelLabel(p.activeWorld)} · Chương ${selectedChapter + 1} - Bài ${i + 1}`, 'journey');
+        };
+      });
+      document.querySelectorAll('[data-preview-lesson]').forEach((b) => {
+        b.onclick = () => {
+          const i = Number(b.dataset.previewLesson);
+          const lw = chapterWords.slice(i * 10, (i + 1) * 10);
+          openModal(`
+            <h3 class="card-title">📖 Danh sách từ Bài ${i + 1} (Chương ${selectedChapter + 1})</h3>
+            <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">
+              ${lw.map((w) => `
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border:1px solid var(--border);border-radius:10px">
+                  <div>
+                    <strong class="hanzi-md">${w.hanzi}</strong> <span style="color:var(--primary);font-weight:700">${w.pinyin}</span>
+                    <div style="font-size:0.85rem;color:var(--text-muted)">${w.meaning}</div>
+                  </div>
+                  <button class="btn btn-outline btn-sm" onclick="window.speechSynthesis.speak(new SpeechSynthesisUtterance('${w.hanzi}'))">🔊</button>
+                </div>
+              `).join('')}
+            </div>
+          `);
+        };
+      });
+    };
+
+    renderJourney();
+
+  // ==========================================
+  // 5. SỔ TỪ VỰNG CHIA THEO PHẦN (TRẠNG THÁI TRÍ NHỚ + CẤP ĐỘ + PHÂN TRANG)
+  // ==========================================
   } else if (tab === 'practice') {
     let filterLevel = 0;
+    let statusTab = 'all'; // all | unlearned | learning | mastered
+    let page = 1;
+    const pageSize = 30;
+
     main.innerHTML = `
       <div class="card">
         <div class="card-header">
-          <h2 class="card-title">📖 Sổ Tay & Tra Cứu Toàn Bộ Từ Vựng (${allWords.length.toLocaleString()} từ)</h2>
+          <h2 class="card-title">📜 Sổ Từ Vựng Phân Phần Thông Minh (${allWords.length.toLocaleString()} từ)</h2>
         </div>
+
+        <!-- 4 NGĂN TRẠNG THÁI TRÍ NHỚ -->
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+          <button class="btn btn-primary btn-sm" data-st-tab="all">📚 Tất cả từ</button>
+          <button class="btn btn-outline btn-sm" data-st-tab="unlearned">🆕 Chưa học</button>
+          <button class="btn btn-outline btn-sm" data-st-tab="learning">🔁 Đang ôn tập</button>
+          <button class="btn btn-outline btn-sm" data-st-tab="mastered">✅ Đã thuộc lòng</button>
+        </div>
+
+        <!-- THANH TÌM KIẾM & LỌC CẤP ĐỘ -->
         <div style="display:flex;gap:10px;margin-bottom:14px">
-          <input type="search" id="vocab-search" placeholder="Nhập chữ Hán, pinyin hoặc nghĩa tiếng Việt để lọc..." />
-          <select id="vocab-level-filter" style="width:150px;flex-shrink:0">
-            <option value="0">Tất cả cấp độ</option>
+          <input type="search" id="vocab-search" placeholder="Tìm chữ Hán, pinyin hoặc nghĩa tiếng Việt..." />
+          <select id="vocab-level-filter" style="width:160px;flex-shrink:0">
+            <option value="0">Tất cả cấp (HSK 1–9)</option>
             ${LEVELS.map((l) => `<option value="${l}">${levelLabel(l)}</option>`).join('')}
           </select>
         </div>
+
+        <div id="vocab-summary" style="font-size:0.84rem;color:var(--text-muted);margin-bottom:10px"></div>
         <div id="vocab-list" class="deck-grid"></div>
-      </div>`;
-    const renderList = () => {
+        <div id="vocab-pagination" style="display:flex;justify-content:center;align-items:center;gap:12px;margin-top:16px"></div>
+      </div>
+    `;
+
+    const renderVocab = () => {
       const k = document.getElementById('vocab-search').value.trim().toLowerCase();
       const filtered = allWords.filter((w) => {
         if (filterLevel && w.level !== filterLevel) return false;
+        const rec = store.state.srs[w.hanzi];
+        if (statusTab === 'unlearned' && rec) return false;
+        if (statusTab === 'learning' && (!rec || rec.streak >= 3)) return false;
+        if (statusTab === 'mastered' && (!rec || rec.streak < 3)) return false;
         return !k || w.hanzi.includes(k) || w.pinyin.toLowerCase().includes(k) || w.meaning.toLowerCase().includes(k);
-      }).slice(0, 60);
-      document.getElementById('vocab-list').innerHTML = filtered.map((w) => `
-        <div class="deck-card">
+      });
+
+      const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+      if (page > totalPages) page = 1;
+      const slice = filtered.slice((page - 1) * pageSize, page * pageSize);
+
+      document.getElementById('vocab-summary').innerHTML = `Tìm thấy <strong>${filtered.length.toLocaleString()}</strong> từ phù hợp · Trang <strong>${page}/${totalPages}</strong>`;
+
+      document.getElementById('vocab-list').innerHTML = slice.map((w) => `
+        <div class="deck-card" data-detail-word="${w.hanzi}">
           <div>
             <div style="display:flex;justify-content:space-between;align-items:center">
               <span class="badge-pill">${levelLabel(w.level)}</span>
@@ -352,12 +672,57 @@ async function renderView(tab) {
             <div style="font-size:0.85rem;color:var(--text-muted);margin-top:4px">${w.meaning}</div>
           </div>
           <span class="badge-pill" style="align-self:flex-start">${getWordStatus(store.state.srs[w.hanzi])}</span>
-        </div>`).join('');
-      document.querySelectorAll('[data-say]').forEach((b) => { b.onclick = () => tts.speak(b.dataset.say); });
+        </div>
+      `).join('');
+
+      document.getElementById('vocab-pagination').innerHTML = `
+        <button class="btn btn-outline btn-sm" id="btn-v-prev" ${page <= 1 ? 'disabled' : ''}>⬅️ Trang trước</button>
+        <span style="font-size:0.85rem;font-weight:700">Trang ${page} / ${totalPages}</span>
+        <button class="btn btn-outline btn-sm" id="btn-v-next" ${page >= totalPages ? 'disabled' : ''}>Trang sau ➡️</button>
+      `;
+
+      document.getElementById('btn-v-prev').onclick = () => { page--; renderVocab(); };
+      document.getElementById('btn-v-next').onclick = () => { page++; renderVocab(); };
+
+      document.querySelectorAll('[data-say]').forEach((b) => {
+        b.onclick = (e) => { e.stopPropagation(); tts.speak(b.dataset.say); };
+      });
+      document.querySelectorAll('[data-detail-word]').forEach((card) => {
+        card.onclick = () => {
+          const w = allWords.find((x) => x.hanzi === card.dataset.detailWord);
+          if (!w) return;
+          tts.speak(w.hanzi);
+          openModal(`
+            <div style="text-align:center">
+              <span class="badge-pill">${levelLabel(w.level)} · ${w.pos || 'Từ vựng'}</span>
+              <div class="hanzi-xl" style="margin:12px 0 4px">${w.hanzi}</div>
+              <div style="font-size:1.2rem;color:var(--primary);font-weight:800">${w.pinyin}</div>
+              <p style="font-size:1.05rem;font-weight:700;margin:10px 0">${w.meaning}</p>
+              ${w.exZh ? `<div style="background:var(--surface-alt);padding:10px;border-radius:12px;text-align:left;margin-top:10px">
+                <div style="font-weight:700">${w.exZh}</div>
+                <div style="font-size:0.84rem;color:var(--primary)">${w.exPy}</div>
+                <div style="font-size:0.84rem;color:var(--text-muted)">${w.exVi}</div>
+              </div>` : ''}
+              <button class="btn btn-primary btn-block" style="margin-top:12px" onclick="window.speechSynthesis.speak(new SpeechSynthesisUtterance('${w.hanzi}'))">🔊 Nghe phát âm chuẩn</button>
+            </div>
+          `);
+        };
+      });
     };
-    renderList();
-    document.getElementById('vocab-search').oninput = renderList;
-    document.getElementById('vocab-level-filter').onchange = (e) => { filterLevel = Number(e.target.value); renderList(); };
+
+    document.querySelectorAll('[data-st-tab]').forEach((b) => {
+      b.onclick = () => {
+        statusTab = b.dataset.stTab;
+        page = 1;
+        document.querySelectorAll('[data-st-tab]').forEach((x) => { x.className = 'btn btn-outline btn-sm'; });
+        b.className = 'btn btn-primary btn-sm';
+        renderVocab();
+      };
+    });
+    document.getElementById('vocab-search').oninput = () => { page = 1; renderVocab(); };
+    document.getElementById('vocab-level-filter').onchange = (e) => { filterLevel = Number(e.target.value); page = 1; renderVocab(); };
+    renderVocab();
+
   } else if (tab === 'exam') {
     const history = store.state.examHistory || [];
     main.innerHTML = `
@@ -381,7 +746,7 @@ async function renderView(tab) {
       </div>
       ${history.length ? `
         <div class="card">
-          <h3 class="card-title">🏅 Bảng Điểm Các Kỳ Thi Đã Hoàn Thành</h3>
+          <h3 class="card-title">🏅 Bảng Điểm Các Kỳ Thi Đã Hoàn Thành (${p.name})</h3>
           <div class="rank-list">
             ${history.slice(0, 8).map((h) => `
               <div class="rank-row">
@@ -405,7 +770,7 @@ async function renderView(tab) {
         <p style="font-size:0.9rem;color:var(--text-muted)">Thử thách 10 từ ngẫu nhiên cấp <strong>${levelLabel(p.activeWorld)}</strong> với giọng đọc bản xứ.</p>
         <button class="btn btn-primary btn-block" id="btn-go-mode">🚀 Bắt đầu ngay</button>
       </div>`;
-    document.getElementById('btn-go-mode').onclick = () => startQuickQuiz(sample, titles[tab]);
+    document.getElementById('btn-go-mode').onclick = () => startQuickQuiz(sample, titles[tab], tab);
   } else if (tab === 'grammar' || tab === 'story') {
     main.innerHTML = `
       <div class="card">
@@ -415,7 +780,7 @@ async function renderView(tab) {
       </div>`;
     document.getElementById('btn-ask-ai-now').onclick = openAITutorModal;
   } else if (tab === 'review') {
-    startQuickQuiz(due.length ? due : fresh, 'Ôn tập từ vựng');
+    startQuickQuiz(due.length ? due : fresh, 'Ôn tập từ vựng SRS', 'home');
   }
 }
 
@@ -435,7 +800,8 @@ async function boot() {
   document.querySelectorAll('.side-item').forEach((b) => { b.onclick = () => switchTab(b.dataset.tab); });
   document.getElementById('btn-home').onclick = () => switchTab('home');
   document.getElementById('btn-ai-tutor').onclick = openAITutorModal;
-  document.getElementById('btn-open-ai-side').onclick = openAITutorModal;
+  document.getElementById('btn-auth-sidebar').onclick = () => openAuthModal('login');
+  document.getElementById('ui-user-badge').onclick = () => openAuthModal('login');
   document.getElementById('modal-close').onclick = closeModal;
   document.getElementById('btn-toggle-sidebar').onclick = () => {
     document.getElementById('sidebar').classList.toggle('collapsed');
@@ -448,7 +814,6 @@ async function boot() {
     store.save(); updateTopbar();
   };
 
-  // Tìm kiếm từ điển nhanh ngay trên thanh Header
   const searchInp = document.getElementById('global-dict-search');
   const drop = document.getElementById('global-search-dropdown');
   searchInp.oninput = async () => {

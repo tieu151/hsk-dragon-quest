@@ -1,4 +1,4 @@
-const CACHE_NAME = 'longmon-hsk-v4-dashboard';
+const CACHE_NAME = 'longmon-hsk-v5-auth-journey';
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => {
   e.waitUntil(

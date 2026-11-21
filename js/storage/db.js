@@ -1,31 +1,149 @@
-const LS_KEY = 'longmon_hsk_state_v1';
-const DEFAULT_STATE = {
-  profile: {
-    xp: 0, coins: 50, streak: 0, freezes: 1, lastStudyDate: null,
-    activeWorld: 1, badges: [], stageStars: {}, bossDefeated: {},
-    dailyTasks: { date: null, reviewsDone: 0, gameWon: false }
-  },
-  settings: { theme: 'light', hanziScale: 1, sfx: true, ttsRate: 1.0 },
-  srs: {}, weeklyRtLog: []
-};
+const ACCOUNTS_INDEX_KEY = 'longmon_hsk_accounts_v1';
+const ACTIVE_USER_KEY = 'longmon_hsk_active_user_v1';
 
-class StorageManager {
-  constructor() { this.state = this.loadLocal(); }
-  loadLocal() {
-    try {
-      const raw = localStorage.getItem(LS_KEY);
-      if (!raw) return structuredClone(DEFAULT_STATE);
-      const parsed = JSON.parse(raw);
-      return { ...structuredClone(DEFAULT_STATE), ...parsed, profile: { ...DEFAULT_STATE.profile, ...(parsed.profile || {}) } };
-    } catch { return structuredClone(DEFAULT_STATE); }
+function defaultState(displayName = 'Học viên Khách', avatar = '🐼') {
+  return {
+    profile: {
+      name: displayName,
+      avatar,
+      xp: 0,
+      coins: 50,
+      streak: 0,
+      freezes: 1,
+      lastStudyDate: null,
+      activeWorld: 1
+    },
+    srs: {},
+    customDecks: [],
+    examHistory: [],
+    settings: { theme: 'light' }
+  };
+}
+
+class MultiUserStore {
+  constructor() {
+    this.accounts = this._loadAccounts();
+    this.currentUsername = localStorage.getItem(ACTIVE_USER_KEY) || null;
+    this.state = this._loadUserState(this.currentUsername);
   }
-  save() { try { localStorage.setItem(LS_KEY, JSON.stringify(this.state)); } catch {} }
-  exportJSON() { return JSON.stringify({ app: 'LongMonHSK', state: this.state }, null, 2); }
-  importJSON(txt) {
-    const p = JSON.parse(txt);
-    this.state = { ...structuredClone(DEFAULT_STATE), ...(p.state || p) };
+
+  _loadAccounts() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(ACCOUNTS_INDEX_KEY) || '[]');
+      return Array.isArray(raw) ? raw : [];
+    } catch { return []; }
+  }
+
+  _saveAccounts() {
+    localStorage.setItem(ACCOUNTS_INDEX_KEY, JSON.stringify(this.accounts));
+  }
+
+  _storageKey(username) {
+    return username ? `longmon_hsk_data_${username}` : 'longmon_hsk_guest_data';
+  }
+
+  _loadUserState(username) {
+    try {
+      const raw = localStorage.getItem(this._storageKey(username));
+      if (!raw) {
+        const acc = this.accounts.find((a) => a.username === username);
+        return defaultState(acc ? acc.displayName : 'Học viên Khách', acc ? acc.avatar : '🐼');
+      }
+      const parsed = JSON.parse(raw);
+      const base = defaultState();
+      return {
+        ...base,
+        ...parsed,
+        profile: { ...base.profile, ...(parsed.profile || {}) },
+        settings: { ...base.settings, ...(parsed.settings || {}) }
+      };
+    } catch {
+      return defaultState();
+    }
+  }
+
+  save() {
+    localStorage.setItem(this._storageKey(this.currentUsername), JSON.stringify(this.state));
+    if (this.currentUsername) {
+      const idx = this.accounts.findIndex((a) => a.username === this.currentUsername);
+      if (idx >= 0) {
+        this.accounts[idx].xp = this.state.profile.xp;
+        this.accounts[idx].level = Math.floor(this.state.profile.xp / 100) + 1;
+        this.accounts[idx].displayName = this.state.profile.name;
+        this.accounts[idx].avatar = this.state.profile.avatar;
+        this._saveAccounts();
+      }
+    }
+  }
+
+  register({ username, password, displayName, avatar = '🐉' }) {
+    const cleanUser = String(username || '').trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+    if (cleanUser.length < 3) return { ok: false, error: 'Tên đăng nhập phải có ít nhất 3 ký tự (chữ không dấu hoặc số).' };
+    if (!password || password.length < 4) return { ok: false, error: 'Mật khẩu phải có ít nhất 4 ký tự.' };
+    if (this.accounts.length >= 10) return { ok: false, error: 'Thiết bị đã đạt tối đa 10 tài khoản. Vui lòng xóa bớt tài khoản cũ.' };
+    if (this.accounts.some((a) => a.username === cleanUser)) return { ok: false, error: 'Tên đăng nhập này đã tồn tại!' };
+
+    const newAcc = {
+      username: cleanUser,
+      password,
+      displayName: String(displayName || cleanUser).trim(),
+      avatar,
+      xp: 0,
+      level: 1,
+      createdAt: new Date().toLocaleDateString('vi-VN')
+    };
+    this.accounts.push(newAcc);
+    this._saveAccounts();
+
+    this.currentUsername = cleanUser;
+    localStorage.setItem(ACTIVE_USER_KEY, cleanUser);
+    this.state = defaultState(newAcc.displayName, avatar);
+    this.save();
+    return { ok: true };
+  }
+
+  login(username, password) {
+    const cleanUser = String(username || '').trim().toLowerCase();
+    const acc = this.accounts.find((a) => a.username === cleanUser && a.password === password);
+    if (!acc) return { ok: false, error: 'Sai tên đăng nhập hoặc mật khẩu!' };
+    this.currentUsername = acc.username;
+    localStorage.setItem(ACTIVE_USER_KEY, acc.username);
+    this.state = this._loadUserState(acc.username);
+    return { ok: true };
+  }
+
+  quickSwitch(username) {
+    const acc = this.accounts.find((a) => a.username === username);
+    if (!acc) return false;
+    this.currentUsername = acc.username;
+    localStorage.setItem(ACTIVE_USER_KEY, acc.username);
+    this.state = this._loadUserState(acc.username);
+    return true;
+  }
+
+  logout() {
+    this.currentUsername = null;
+    localStorage.removeItem(ACTIVE_USER_KEY);
+    this.state = this._loadUserState(null);
+  }
+
+  deleteAccount(username) {
+    this.accounts = this.accounts.filter((a) => a.username !== username);
+    this._saveAccounts();
+    localStorage.removeItem(this._storageKey(username));
+    if (this.currentUsername === username) this.logout();
+  }
+
+  exportJSON() {
+    return JSON.stringify(this.state, null, 2);
+  }
+
+  resetAll() {
+    const keepName = this.state.profile.name;
+    const keepAvatar = this.state.profile.avatar;
+    this.state = defaultState(keepName, keepAvatar);
     this.save();
   }
-  resetAll() { this.state = structuredClone(DEFAULT_STATE); this.save(); }
 }
-export const store = new StorageManager();
+
+export const store = new MultiUserStore();

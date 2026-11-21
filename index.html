@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
-  <meta name="theme-color" content="#b91c1c" />
+  <meta name="theme-color" content="#c23b2b" />
   <title>Long Môn HSK — Nền Tảng Học Tiếng Trung Toàn Diện</title>
   <link rel="manifest" href="./manifest.json" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -15,7 +15,6 @@
 </head>
 <body>
   <div id="app" class="layout-wrapper">
-    <!-- SIDEBAR BÊN TRÁI GIỐNG BAOLINGO -->
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-brand" id="btn-home">
         <div class="brand-logo-box">🐉</div>
@@ -24,55 +23,52 @@
 
       <nav class="sidebar-menu">
         <button class="side-item active" data-tab="home"><span class="side-ico">🏠</span><span class="side-txt">Trang chủ</span></button>
-        <button class="side-item" data-tab="practice"><span class="side-ico">📖</span><span class="side-txt">Luyện tập</span></button>
+        <button class="side-item" data-tab="journey"><span class="side-ico">🗺️</span><span class="side-txt">Hành trình bài bản</span></button>
+        <button class="side-item" data-tab="practice"><span class="side-ico">📜</span><span class="side-txt">Sổ từ vựng</span></button>
         <button class="side-item" data-tab="listen"><span class="side-ico">🎧</span><span class="side-txt">Luyện nghe</span></button>
         <button class="side-item" data-tab="speak"><span class="side-ico">🎙️</span><span class="side-txt">Luyện phát âm</span></button>
-        <button class="side-item active-soft" data-tab="vocab"><span class="side-ico">📙</span><span class="side-txt">Từ vựng</span></button>
         <button class="side-item" data-tab="grammar"><span class="side-ico">🎓</span><span class="side-txt">Ngữ pháp</span></button>
-        <button class="side-item" data-tab="review"><span class="side-ico">🔁</span><span class="side-txt">Ôn tập</span></button>
+        <button class="side-item" data-tab="review"><span class="side-ico">🔁</span><span class="side-txt">Ôn tập SRS</span></button>
         <button class="side-item" data-tab="exam"><span class="side-ico">📋</span><span class="side-txt">Luyện thi HSK</span></button>
         <button class="side-item" data-tab="arena"><span class="side-ico">⚔️</span><span class="side-txt">Đấu Trường Từ Vựng</span></button>
         <button class="side-item" data-tab="story"><span class="side-ico">📚</span><span class="side-txt">Truyện đọc</span><span class="badge-new">MỚI</span></button>
       </nav>
 
       <div class="sidebar-footer">
-        <button class="btn btn-primary btn-block" id="btn-open-ai-side">🧙‍♂️ HỎI SƯ PHỤ AI</button>
+        <button class="btn btn-primary btn-block" id="btn-auth-sidebar">👤 ĐĂNG NHẬP / ĐĂNG KÝ</button>
         <button class="collapse-btn" id="btn-toggle-sidebar">« Thu gọn</button>
       </div>
     </aside>
 
-    <!-- KHU VỰC CHÍNH BÊN PHẢI -->
     <div class="content-shell">
       <header class="top-header">
         <button class="mobile-menu-btn" id="btn-mobile-menu">☰</button>
         <div class="dict-search-wrap">
           <span class="search-ico">🔍</span>
-          <input type="search" id="global-dict-search" placeholder="Từ điển: gõ chữ Hán, pinyin hoặc nghĩa tiếng Việt..." />
+          <input type="search" id="global-dict-search" placeholder="Từ điển nhanh: gõ chữ Hán, pinyin hoặc nghĩa tiếng Việt..." />
           <div id="global-search-dropdown" class="search-dropdown hidden"></div>
         </div>
 
         <div class="header-actions">
+          <span class="stat-chip" id="ui-user-badge" style="cursor:pointer" title="Quản lý tài khoản">🐼 Khách</span>
           <span class="stat-chip" id="ui-level">Cấp 1 · HSK 1</span>
           <span class="stat-chip" id="ui-streak" title="Chuỗi ngày học">🔥 0</span>
           <span class="stat-chip" id="ui-coins" title="Xu thưởng">🪙 0</span>
           <button class="icon-circle-btn" id="btn-theme-top" title="Đổi giao diện Sáng / Tối">☀️</button>
-          <span class="lang-pill">🇻🇳 Tiếng Việt</span>
         </div>
       </header>
 
       <main id="main-view" class="dashboard-main">
-        <div class="card" style="text-align:center;padding:30px">Đang tải dữ liệu học tập...</div>
+        <div class="card" style="text-align:center;padding:30px">Đang khởi tạo hệ thống học tập...</div>
       </main>
     </div>
   </div>
 
-  <!-- NÚT NỔI TRỢ LÝ AI -->
   <button id="btn-ai-tutor" class="fab-tutor hidden">
     <span class="fab-pulse"></span>
-    🧙‍♂️ <span>Sư Phụ AI</span>
+    🧙‍♂️ <span>Hỏi Sư Phụ AI</span>
   </button>
 
-  <!-- MODAL -->
   <div id="modal-backdrop" class="modal-backdrop hidden">
     <div class="modal-card">
       <button id="modal-close" class="modal-close" aria-label="Đóng">✕</button>
