@@ -6,5 +6,9 @@
   "scripts": {
     "import:hsk": "node tools/import-official-hsk.js",
     "validate": "node tools/validate.js"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.119.2"
   }
 }

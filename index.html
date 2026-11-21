@@ -3,9 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
-  <meta name="description" content="Panda HSK — Nền tảng học tiếng Trung toàn diện theo chuẩn HSK 3.0 (HSK 1 đến HSK 9): từ vựng SRS, luyện thi thử, chấm phát âm AI, tập viết Hanzi và video bài giảng." />
-  <meta property="og:title" content="Panda HSK — Học Tiếng Trung & Luyện Thi HSK 1–9" />
-  <meta property="og:description" content="Lộ trình học tiếng Trung bài bản HSK 1–9, từ điển vẽ tay, luyện nói AI và thi thử chuẩn quốc tế." />
+  <meta name="description" content="Panda HSK — Nền tảng học tiếng Trung toàn diện theo chuẩn HSK 3.0 (HSK 1 đến HSK 9)." />
   <meta name="theme-color" content="#c23b2b" />
   <title>Panda HSK — Nền Tảng Học Tiếng Trung Toàn Diện HSK 1–9</title>
   <link rel="manifest" href="./manifest.json" />
@@ -22,7 +20,6 @@
         <div class="brand-logo-box">🐼</div>
         <span class="brand-name">Panda HSK</span>
       </div>
-
       <nav class="sidebar-menu">
         <button class="side-item active" data-tab="home"><span class="side-ico">🏠</span><span class="side-txt">Trang chủ</span></button>
         <button class="side-item" data-tab="placement"><span class="side-ico">🧭</span><span class="side-txt">Xếp lớp đầu vào</span></button>
@@ -38,7 +35,6 @@
         <button class="side-item" data-tab="stats"><span class="side-ico">📊</span><span class="side-txt">Thống kê & Nhắc học</span></button>
         <button class="side-item" data-tab="about-hsk"><span class="side-ico">📘</span><span class="side-txt">Giới thiệu HSK</span></button>
       </nav>
-
       <div class="sidebar-footer">
         <button class="btn btn-primary btn-block" id="btn-auth-sidebar">👤 ĐĂNG NHẬP / ĐĂNG KÝ</button>
         <button class="collapse-btn" id="btn-toggle-sidebar">« Thu gọn</button>
@@ -53,24 +49,22 @@
           <input type="search" id="global-dict-search" placeholder="Từ điển nhanh: gõ chữ Hán, pinyin hoặc nghĩa tiếng Việt..." />
           <div id="global-search-dropdown" class="search-dropdown hidden"></div>
         </div>
-
         <div class="header-actions">
-          <span class="stat-chip" id="ui-user-badge" style="cursor:pointer" title="Quản lý tài khoản">🐼 Khách</span>
+          <span class="stat-chip" id="ui-sync-status">☁️ Chế độ Khách</span>
+          <span class="stat-chip" id="ui-user-badge" style="cursor:pointer">🐼 Khách</span>
           <span class="stat-chip" id="ui-level">Cấp 1 · HSK 1</span>
-          <span class="stat-chip" id="ui-streak" title="Chuỗi ngày học">🔥 0</span>
-          <span class="stat-chip" id="ui-coins" title="Xu thưởng">🪙 0</span>
-          <button class="icon-circle-btn" id="btn-theme-top" title="Đổi giao diện Sáng / Tối">☀️</button>
+          <span class="stat-chip" id="ui-streak">🔥 0</span>
+          <span class="stat-chip" id="ui-coins">🪙 0</span>
+          <button class="icon-circle-btn" id="btn-theme-top">☀️</button>
         </div>
       </header>
 
       <main id="main-view" class="dashboard-main">
-        <div class="card" style="text-align:center;padding:30px">Đang khởi tạo Panda HSK...</div>
+        <div class="card" style="text-align:center;padding:30px">Đang kết nối dữ liệu Panda HSK...</div>
       </main>
 
       <footer style="margin-top:24px;padding:16px 20px;border-top:1px solid var(--border);font-size:0.8rem;color:var(--text-muted);display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px">
-        <div>
-          <strong>Panda HSK</strong> · Nguồn dữ liệu mở: <em>Complete HSK Vocabulary (HSK 3.0)</em>, <em>CC-CEDICT</em>, <em>Hanzi Writer</em>.
-        </div>
+        <div><strong>Panda HSK</strong> · Lưu trữ đám mây bảo mật qua Supabase.</div>
         <div style="display:flex;gap:14px;flex-wrap:wrap">
           <a href="#about-hsk" data-pub-link="about-hsk" style="color:var(--primary)">Giới thiệu các cấp HSK</a>
           <a href="#privacy" data-pub-link="privacy" style="color:var(--primary)">Chính sách bảo mật</a>
@@ -81,18 +75,13 @@
     </div>
   </div>
 
-  <button id="btn-ai-tutor" class="fab-tutor">
-    <span class="fab-pulse"></span>
-    🐼 <span>Hỏi Sư Phụ AI</span>
-  </button>
-
+  <button id="btn-ai-tutor" class="fab-tutor"><span class="fab-pulse"></span>🐼 <span>Hỏi Sư Phụ AI</span></button>
   <div id="modal-backdrop" class="modal-backdrop hidden">
     <div class="modal-card">
       <button id="modal-close" class="modal-close" aria-label="Đóng">✕</button>
       <div id="modal-body"></div>
     </div>
   </div>
-
   <script type="module" src="./js/app.js"></script>
 </body>
 </html>
