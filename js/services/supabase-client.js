@@ -2,11 +2,13 @@
 // Hoạt động hoàn chỉnh 100% NGAY LẬP TỨC mà không cần cấu hình biến môi trường (Zero-Config Vault),
 // đồng thời tự động nâng cấp lên Supabase Cloud nếu máy chủ có cấu hình SUPABASE_URL & SUPABASE_ANON_KEY.
 
+const DEFAULT_GOOGLE_CLIENT_ID =
+  '289619157211-gnaq93mvn5mgdcah6s7ocjathg23dbcm.apps.googleusercontent.com';
 let supabaseClient = null;
 let initPromise = null;
 let lastConfigError = '';
 let missingEnvNames = [];
-let cachedOAuthConfig = { googleClientId: '', facebookAppId: '' };
+let cachedOAuthConfig = { googleClientId: DEFAULT_GOOGLE_CLIENT_ID, facebookAppId: '' };
 const USERNAME_DOMAIN = 'pandahsk.app';
 export const MIN_PASSWORD = 8;
 export const MAX_PASSWORD = 72;
@@ -204,7 +206,10 @@ export function getSavedSocialProfiles(provider = '') {
 export function getOAuthClientIds() {
   const localCfg = readLocalJson(OAUTH_CLIENT_STORAGE_KEY, {});
   return {
-    googleClientId: cachedOAuthConfig.googleClientId || String(localCfg?.googleClientId || '').trim(),
+    googleClientId:
+      String(localCfg?.googleClientId || '').trim() ||
+      cachedOAuthConfig.googleClientId ||
+      DEFAULT_GOOGLE_CLIENT_ID,
     facebookAppId: cachedOAuthConfig.facebookAppId || String(localCfg?.facebookAppId || '').trim()
   };
 }
@@ -225,7 +230,7 @@ export function saveLocalOAuthClientIds({ googleClientId, facebookAppId }) {
 export async function startRealOAuthRedirect(provider = 'google') {
   const sb = await getSupabase();
   const ids = getOAuthClientIds();
-  const origin = typeof window !== 'undefined' ? window.location.origin + window.location.pathname : '';
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
 
   if (provider === 'google') {
     if (ids.googleClientId) {

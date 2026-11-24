@@ -1,10 +1,13 @@
+const DEFAULT_GOOGLE_CLIENT_ID =
+  '289619157211-gnaq93mvn5mgdcah6s7ocjathg23dbcm.apps.googleusercontent.com';
+
 export default function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
   const supabaseUrl = String(process.env.SUPABASE_URL || '').trim();
   const supabaseAnonKey = String(process.env.SUPABASE_ANON_KEY || '').trim();
-  const googleClientId = String(process.env.GOOGLE_CLIENT_ID || '').trim();
+  const googleClientId = String(process.env.GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID).trim();
   const facebookAppId = String(process.env.FACEBOOK_APP_ID || '').trim();
   const missing = [];
   if (!supabaseUrl) missing.push('SUPABASE_URL');
