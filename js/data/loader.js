@@ -1,8 +1,34 @@
+// Bộ phân tích tệp TSV từ vựng HSK 1-9: tách bạch từ loại (pos) và nghĩa tiếng Việt
+const POS_TAG_PATTERN = /^[a-z]{1,4}(\/[a-z]{1,4})*$/i;
+const PLACEHOLDER_MEANINGS = new Set([
+  '',
+  'chưa cập nhật nghĩa',
+  'chưa có nghĩa tiếng việt',
+  'n/a',
+  'null',
+  'undefined',
+  '-'
+]);
+
+export function isPosTagOnly(text) {
+  const s = String(text || '').trim();
+  if (!s) return false;
+  return POS_TAG_PATTERN.test(s);
+}
+
+export function isValidVietnameseMeaning(meaning) {
+  const s = String(meaning || '').trim();
+  if (!s) return false;
+  if (PLACEHOLDER_MEANINGS.has(s.toLowerCase())) return false;
+  if (isPosTagOnly(s)) return false;
+  return true;
+}
+
 function parseTsvLine(line) {
   return line.split('\t').map((s) => s.trim());
 }
 
-function normalizeTsvRows(tsvText, fallbackLevel) {
+export function normalizeTsvRows(tsvText, fallbackLevel) {
   const lines = String(tsvText || '')
     .split(/\r?\n/)
     .map((l) => l.trim())
@@ -16,43 +42,54 @@ function normalizeTsvRows(tsvText, fallbackLevel) {
       continue;
     }
 
-    let hanzi = '';
-    let pinyin = '';
+    const hanzi = cols[0] || '';
+    if (!hanzi) continue;
+
+    const pinyin = cols[1] || '';
     let meaning = '';
     let pos = '';
+    let level = fallbackLevel;
     let exZh = '';
     let exPy = '';
     let exVi = '';
-    let level = fallbackLevel;
 
-    if (cols.length >= 3) {
-      // Ho tro cac dinh dang TSV pho bien: hanzi, pinyin, meaning, [pos], [level], [exZh], [exPy], [exVi]
-      hanzi = cols[0];
-      pinyin = cols[1];
-      meaning = cols[2];
-      pos = cols[3] && !/^\d+$/.test(cols[3]) ? cols[3] : '';
-      const lvlCandidate = Number(cols[4] || cols[3] || fallbackLevel);
-      if (Number.isInteger(lvlCandidate) && lvlCandidate >= 1 && lvlCandidate <= 9) {
-        level = lvlCandidate;
-      }
+    const c2 = cols[2] || '';
+    const c3 = cols[3] || '';
+    const c4 = cols[4] || '';
+
+    if (isPosTagOnly(c2)) {
+      // Định dạng: hanzi \t pinyin \t pos \t meaning \t [level] \t [exZh] \t [exPy] \t [exVi]
+      pos = c2;
+      meaning = isValidVietnameseMeaning(c3) ? c3 : '';
+      const lvlNum = Number(c4);
+      if (Number.isInteger(lvlNum) && lvlNum >= 1 && lvlNum <= 9) level = lvlNum;
       exZh = cols[5] || '';
       exPy = cols[6] || '';
       exVi = cols[7] || '';
-    } else if (cols.length === 2) {
-      hanzi = cols[0];
-      meaning = cols[1];
-    } else if (cols.length === 1 && cols[0]) {
-      hanzi = cols[0];
-      meaning = 'Chưa có nghĩa tiếng Việt';
+    } else {
+      // Định dạng: hanzi \t pinyin \t meaning \t [pos] \t [level] \t [exZh] \t [exPy] \t [exVi]
+      meaning = isValidVietnameseMeaning(c2) ? c2 : '';
+      if (isPosTagOnly(c3)) {
+        pos = c3;
+      } else if (c3 && !/^\d+$/.test(c3) && !meaning && isValidVietnameseMeaning(c3)) {
+        meaning = c3;
+      }
+      const lvlNum = Number(c4 || c3);
+      if (Number.isInteger(lvlNum) && lvlNum >= 1 && lvlNum <= 9) level = lvlNum;
+      exZh = cols[5] || '';
+      exPy = cols[6] || '';
+      exVi = cols[7] || '';
     }
 
-    if (!hanzi) continue;
+    const validMeaning = isValidVietnameseMeaning(meaning);
+
     items.push({
       id: `${level}_${i}_${hanzi}`,
       level,
       hanzi,
-      pinyin: pinyin || '',
-      meaning: meaning || 'Chưa cập nhật nghĩa',
+      pinyin,
+      meaning: validMeaning ? meaning : '',
+      hasValidMeaning: validMeaning,
       pos: pos || 'Từ vựng',
       exZh,
       exPy,
@@ -97,32 +134,33 @@ class DataLoader {
 
       let merged = results.flat();
 
-      // Phan bo bo sung cho HSK 8 va HSK 9 tu kho cap cao neu chua co file tsv rieng
+      // Phân bổ bổ sung HSK 8 và HSK 9 từ nhóm từ cấp cao nếu chưa có tệp riêng
       const hasLv8 = merged.some((w) => w.level === 8);
       const hasLv9 = merged.some((w) => w.level === 9);
       const lv7Pool = merged.filter((w) => w.level === 7);
 
       if (!hasLv8 && lv7Pool.length > 0) {
         const half = Math.ceil(lv7Pool.length / 2);
-        const lv8Words = lv7Pool.slice(0, half).map((w, idx) => ({
-          ...w,
-          id: `8_${idx}_${w.hanzi}`,
-          level: 8
-        }));
-        merged = merged.concat(lv8Words);
+        merged = merged.concat(
+          lv7Pool.slice(0, half).map((w, idx) => ({
+            ...w,
+            id: `8_${idx}_${w.hanzi}`,
+            level: 8
+          }))
+        );
       }
 
       if (!hasLv9 && lv7Pool.length > 0) {
         const half = Math.floor(lv7Pool.length / 2);
-        const lv9Words = lv7Pool.slice(half).map((w, idx) => ({
-          ...w,
-          id: `9_${idx}_${w.hanzi}`,
-          level: 9
-        }));
-        merged = merged.concat(lv9Words);
+        merged = merged.concat(
+          lv7Pool.slice(half).map((w, idx) => ({
+            ...w,
+            id: `9_${idx}_${w.hanzi}`,
+            level: 9
+          }))
+        );
       }
 
-      // Khử trùng lặp theo (level, hanzi) giữ bản đầu tiên
       const seen = new Set();
       this.words = merged.filter((w) => {
         const key = `${w.level}::${w.hanzi}`;
@@ -132,18 +170,35 @@ class DataLoader {
       });
 
       this.loaded = true;
-      if (this.words.length === 0) {
-        this.lastError = 'Dữ liệu từ vựng hiện đang rỗng.';
-      }
       return this.words;
     } catch (err) {
       this.lastError = err?.message || 'Không thể tải tệp dữ liệu từ vựng.';
-      // Dự phòng tối thiểu nếu mất toàn bộ file dữ liệu
       if (!this.words.length) {
         this.words = [
-          { id: '1_0_你好', level: 1, hanzi: '你好', pinyin: 'nǐ hǎo', meaning: 'xin chào', pos: 'Thán từ', exZh: '你好！', exPy: 'Nǐ hǎo!', exVi: 'Xin chào!' },
-          { id: '1_1_谢谢', level: 1, hanzi: '谢谢', pinyin: 'xièxie', meaning: 'cảm ơn', pos: 'Động từ', exZh: '谢谢你。', exPy: 'Xièxie nǐ.', exVi: 'Cảm ơn bạn.' },
-          { id: '1_2_学习', level: 1, hanzi: '学习', pinyin: 'xuéxí', meaning: 'học tập', pos: 'Động từ', exZh: '我学习汉语。', exPy: 'Wǒ xuéxí Hànyǔ.', exVi: 'Tôi học tiếng Hán.' }
+          {
+            id: '1_0_你好',
+            level: 1,
+            hanzi: '你好',
+            pinyin: 'nǐ hǎo',
+            meaning: 'xin chào',
+            hasValidMeaning: true,
+            pos: 'Thán từ',
+            exZh: '你好，很高兴认识你！',
+            exPy: 'Nǐ hǎo, hěn gāoxìng rènshi nǐ!',
+            exVi: 'Xin chào, rất vui được làm quen với bạn!'
+          },
+          {
+            id: '1_1_谢谢',
+            level: 1,
+            hanzi: '谢谢',
+            pinyin: 'xièxie',
+            meaning: 'cảm ơn',
+            hasValidMeaning: true,
+            pos: 'Động từ',
+            exZh: '谢谢你的帮助。',
+            exPy: 'Xièxie nǐ de bāngzhù.',
+            exVi: 'Cảm ơn sự giúp đỡ của bạn.'
+          }
         ];
       }
       this.loaded = true;
@@ -158,4 +213,3 @@ class DataLoader {
 }
 
 export const dataLoader = new DataLoader();
-export { normalizeTsvRows };
