@@ -1,6 +1,6 @@
 import { store } from './storage/db.js';
 import { dataLoader } from './data/loader.js';
-import { EXAM_CONFIGS, launchExamUI } from './exam/exam-engine.js';
+import { EXAM_CONFIGS, launchExamUI, getExamCoverageStats } from './exam/exam-engine.js';
 import {
   getSupabase,
   getSupabaseConnectionStatus,
@@ -1132,16 +1132,40 @@ function renderView(tab) {
     const draft = store.state.inProgressExam;
     main.innerHTML = `
       <div class="card">
-        <div class="card-header"><h2 class="card-title">📋 Phòng Thi Thử Panda HSK (HSK 1 – HSK 9)</h2></div>
-        ${draft ? `<div style="padding:12px;border-radius:12px;background:var(--surface-alt);border:1.5px solid var(--primary);display:flex;justify-content:space-between;align-items:center;margin:12px 0"><div><strong>📝 Bài thi đang làm dở:</strong> HSK ${draft.level} (<code>${draft.examId}</code>)</div><button class="btn btn-primary btn-sm" id="btn-resume-draft">▶️ Tiếp tục</button></div>` : ''}
+        <div class="card-header" style="flex-wrap:wrap;gap:8px">
+          <div>
+            <h2 class="card-title">📋 Phòng Thi Thực Chiến Panda HSK (HSK 1 – HSK 9)</h2>
+            <p style="font-size:0.84rem;color:var(--text-muted);margin:4px 0 0">
+              Cấu trúc chuẩn 3 kỹ năng (🎧 Nghe hiểu · 📖 Đọc hiểu · ✍️ Viết &amp; Ngữ pháp) · 4 Bộ đề chuẩn tách biệt mỗi cấp + Sinh đề chống trùng lặp.
+            </p>
+          </div>
+          <span class="badge-pill">Thang điểm 300 · Đạt ≥ 180</span>
+        </div>
+        ${draft ? `<div style="padding:12px;border-radius:12px;background:var(--surface-alt);border:1.5px solid var(--primary);display:flex;justify-content:space-between;align-items:center;margin:12px 0;flex-wrap:wrap;gap:8px"><div><strong>📝 Bài thi đang làm dở:</strong> HSK ${draft.level} (<code>${draft.examId}</code>)</div><button class="btn btn-primary btn-sm" id="btn-resume-draft">▶️ Tiếp tục làm bài</button></div>` : ''}
         <div class="deck-grid" style="margin-top:12px">
           ${LEVELS.map((l) => {
             const c = EXAM_CONFIGS[l];
-            return `<div class="deck-card" data-start-exam="${l}"><div><div style="display:flex;justify-content:space-between"><strong style="color:var(--primary)">${c.label}</strong><span class="badge-pill">${c.totalQ} câu · ${c.minutes}p</span></div><p style="font-size:0.8rem;color:var(--text-muted);margin:6px 0 0">${c.desc}</p></div><button class="btn btn-primary btn-sm btn-block">📝 Vào phòng thi</button></div>`;
+            const cov = getExamCoverageStats(l);
+            return `<div class="deck-card" data-start-exam="${l}">
+              <div>
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+                  <strong style="color:var(--primary);font-size:1.05rem">${c.label} <span style="font-size:0.75rem;color:var(--text-muted);font-weight:600">· ${c.standard || ''}</span></strong>
+                  <span class="badge-pill">${c.totalQ} câu · ${c.minutes}p</span>
+                </div>
+                <p style="font-size:0.8rem;color:var(--text-muted);margin:6px 0 8px;line-height:1.4">${c.desc}</p>
+                <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">
+                  ${(c.skillsMeta || []).map((sm) => `<span class="badge-pill" style="font-size:0.72rem;background:var(--surface-alt)">${sm}</span>`).join('')}
+                </div>
+                <div style="font-size:0.75rem;color:var(--text-muted)">
+                  Bộ đề chuẩn đã hoàn thành: <strong>${cov.completedSets.length}/4</strong> · Đã luyện: <strong>${cov.totalSeenItems}</strong> mục
+                </div>
+              </div>
+              <button class="btn btn-primary btn-sm btn-block">📝 Chọn bộ đề &amp; Vào thi</button>
+            </div>`;
           }).join('')}
         </div>
       </div>
-      ${history.length ? `<div class="card"><h3 class="card-title">🏅 Lịch Sử Thi (${p.name})</h3><div class="rank-list">${history.slice(0, 10).map((h) => `<div class="rank-row"><span><strong>HSK ${h.level}</strong> · <code>${h.examId}</code> (${h.date})</span><span style="font-weight:800;color:${h.passed ? 'var(--green)' : 'var(--primary)'}">${h.score}/${h.maxScore} · ${h.passed ? 'ĐẠT' : 'CHƯA ĐẠT'}</span></div>`).join('')}</div></div>` : ''}`;
+      ${history.length ? `<div class="card"><h3 class="card-title">🏅 Lịch Sử Thi (${esc(p.name)})</h3><div class="rank-list">${history.slice(0, 12).map((h) => `<div class="rank-row"><span><strong>HSK ${h.level}</strong> · <code>${esc(h.examId)}</code> (${esc(h.date)})</span><span style="font-weight:800;color:${h.passed ? 'var(--green)' : 'var(--primary)'}">${h.hsk300Score ? `${h.hsk300Score}/300 đ (${h.score}%)` : `${h.score}/${h.maxScore}`} · ${h.passed ? 'ĐẠT' : 'CHƯA ĐẠT'}</span></div>`).join('')}</div></div>` : ''}`;
     if (document.getElementById('btn-resume-draft')) {
       document.getElementById('btn-resume-draft').onclick = () => launchExamUI(main, draft.level, allWords, () => renderView('exam'), draft);
     }

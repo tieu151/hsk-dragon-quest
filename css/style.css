@@ -458,6 +458,38 @@ input[type="text"], input[type="search"], select, textarea {
   user-select: all;
   word-break: break-all;
 }
+.exam-section-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--card, #ffffff);
+  border: 1px solid var(--border, #e2e8f0);
+}
+.exam-segment-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px;
+  margin: 0 0 12px;
+  border-radius: 12px;
+  background: var(--surface-alt, #fff7ed);
+  border: 1.5px dashed var(--primary, #c23b2b);
+}
+.exam-segment-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: var(--card, #ffffff);
+  border: 1.5px solid var(--border, #cbd5e1);
+  font-weight: 700;
+  font-size: 0.98rem;
+  color: var(--text, #0f172a);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
 @keyframes pandaSpin {
   to { transform: rotate(360deg); }
 }

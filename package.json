@@ -6,8 +6,8 @@
   "scripts": {
     "import:hsk": "node tools/import-official-hsk.js",
     "validate": "node tools/validate.js",
-    "build": "node --check js/data/loader.js && node --check js/exam/exam-config.js && node --check js/exam/passages.js && node --check js/exam/exam-engine.js && node --check js/app.js && node --check js/services/supabase-client.js && node --check api/auth.js",
-    "test": "node tests/auth-api.test.mjs && node tests/step3-verification.mjs"
+    "build": "node --check js/data/loader.js && node --check js/exam/exam-config.js && node --check js/exam/passages.js && node --check js/exam/question-banks.js && node --check js/exam/exam-engine.js && node --check js/app.js && node --check js/services/supabase-client.js && node --check api/auth.js",
+    "test": "node tests/auth-api.test.mjs && node tests/step3-verification.mjs && node tests/exam-step5.test.mjs && node tests/vocab-counts.test.js"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
