@@ -270,7 +270,8 @@ export async function startRealOAuthRedirect(provider = 'google') {
         client_id: ids.facebookAppId,
         redirect_uri: origin,
         response_type: 'token',
-        scope: 'public_profile,email',
+        scope: 'public_profile',
+        auth_type: 'rerequest',
         state
       });
       const url = `https://www.facebook.com/v19.0/dialog/oauth?${params.toString()}`;
