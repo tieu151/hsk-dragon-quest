@@ -8,6 +8,15 @@ import {
   authLogin,
   authChangePassword,
   authLogout,
+  authResetPassword,
+  authCreateRecoveryCode,
+  authHasRecoveryCode,
+  checkUsernameAvailability,
+  validateUsername,
+  validateNewPassword,
+  scorePassword,
+  MIN_PASSWORD,
+  MAX_PASSWORD,
   fetchLeaderboard,
   exportUserCloudData,
   deleteAccountOnServer
@@ -28,6 +37,9 @@ const LEVELS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 const levelLabel = (l) => `HSK ${l}`;
 const AVATARS = ['🐼', '🐉', '🐯', '🦊', '🦁', '🐰', '🦅', '🦄'];
 const PUBLIC_TABS = new Set(['home', 'about-hsk', 'privacy', 'terms', 'contact']);
+
+const ESC_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ESC_MAP[c]);
 
 let currentTab = 'home';
 let ALL_WORDS = [];
@@ -95,20 +107,31 @@ function updateTopbar() {
   const sideAuthBtn = document.getElementById('btn-auth-sidebar');
   if (sideAuthBtn) {
     sideAuthBtn.innerHTML = store.user
-      ? `<span>${p.avatar || '🐼'}</span> <span class="side-txt">${p.name}</span>`
+      ? `<span>${esc(p.avatar || '🐼')}</span> <span class="side-txt">${esc(p.name)}</span>`
       : `<span>👤</span> <span class="side-txt">ĐĂNG NHẬP / ĐĂNG KÝ</span>`;
   }
   renderSyncBadge(store.syncStatus);
   document.documentElement.setAttribute('data-theme', store.state.settings.theme || 'light');
 }
 
+// Hook cho modal: modalBeforeClose trả về false để chặn đóng; modalAfterClose chạy sau khi đóng
+let modalBeforeClose = null;
+let modalAfterClose = null;
+
 function openModal(html) {
+  modalBeforeClose = null;
+  modalAfterClose = null;
   document.getElementById('modal-body').innerHTML = html;
   document.getElementById('modal-backdrop').classList.remove('hidden');
 }
 
 function closeModal() {
+  if (modalBeforeClose && !modalBeforeClose()) return;
+  const after = modalAfterClose;
+  modalBeforeClose = null;
+  modalAfterClose = null;
   document.getElementById('modal-backdrop').classList.add('hidden');
+  if (typeof after === 'function') after();
 }
 
 async function checkGuestAndLegacyMigrationPrompt() {
@@ -125,7 +148,7 @@ async function checkGuestAndLegacyMigrationPrompt() {
       ${pendingList.map((item, idx) => `
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px;border:1px solid var(--border);border-radius:10px">
           <div style="font-size:0.86rem">
-            <strong>${item.displayName}</strong>
+            <strong>${esc(item.displayName)}</strong>
             <div style="color:var(--text-muted)">${item.wordCount} từ đã luyện · ${item.xp} XP</div>
           </div>
           <button class="btn btn-primary btn-sm" data-mig-idx="${idx}">Đồng bộ ngay</button>
@@ -155,33 +178,179 @@ async function checkGuestAndLegacyMigrationPrompt() {
   };
 }
 
+function wirePasswordToggles(root = document) {
+  root.querySelectorAll('[data-toggle-target]').forEach((btn) => {
+    btn.onclick = () => {
+      const inp = document.getElementById(btn.dataset.toggleTarget);
+      if (!inp) return;
+      const willShow = inp.type === 'password';
+      inp.type = willShow ? 'text' : 'password';
+      btn.textContent = willShow ? '🙈' : '👁️';
+      btn.setAttribute('aria-pressed', String(willShow));
+      btn.setAttribute('aria-label', willShow ? 'Ẩn mật khẩu' : 'Hiện mật khẩu');
+    };
+  });
+}
+
+function wireCapsLockWarning(root = document) {
+  const warn = root.querySelector('[data-caps-warn]');
+  if (!warn) return;
+  root.querySelectorAll('input[type="password"]').forEach((inp) => {
+    const check = (e) => {
+      if (typeof e.getModifierState !== 'function') return;
+      warn.classList.toggle('hidden', !e.getModifierState('CapsLock'));
+    };
+    inp.addEventListener('keydown', check);
+    inp.addEventListener('keyup', check);
+    inp.addEventListener('blur', () => warn.classList.add('hidden'));
+  });
+}
+
+function wireStrengthMeter(inputId, meterId) {
+  const inp = document.getElementById(inputId);
+  const meter = document.getElementById(meterId);
+  if (!inp || !meter) return;
+  const colors = ['#dc2626', '#dc2626', '#d97706', '#16a34a', '#15803d'];
+  const update = () => {
+    const { score, label } = scorePassword(inp.value);
+    meter.classList.toggle('hidden', !inp.value);
+    meter.querySelector('.panda-strength-fill').style.width = `${Math.max(1, score) * 25}%`;
+    meter.querySelector('.panda-strength-fill').style.background = colors[score];
+    meter.querySelector('.panda-strength-label').textContent = `Độ mạnh: ${label}`;
+    meter.querySelector('.panda-strength-label').style.color = colors[score];
+  };
+  inp.addEventListener('input', update);
+  update();
+}
+
+const strengthMeterHtml = (id) => `
+  <div class="panda-strength hidden" id="${id}">
+    <div class="panda-strength-track"><div class="panda-strength-fill"></div></div>
+    <div class="panda-strength-label"></div>
+  </div>`;
+
+const passwordFieldHtml = (id, label, placeholder, autocomplete) => `
+  <div class="panda-field-group">
+    <label class="panda-field-label" for="${id}">${label}</label>
+    <div class="panda-pass-wrap">
+      <input class="panda-pass-input" type="password" id="${id}" name="${id}" placeholder="${placeholder}" autocomplete="${autocomplete}" maxlength="${MAX_PASSWORD}" />
+      <button type="button" class="panda-eye-btn" data-toggle-target="${id}" aria-label="Hiện mật khẩu" aria-pressed="false">👁️</button>
+    </div>
+  </div>`;
+
+function showRecoveryCodeScreen(code, { username = '', title = '🔐 Lưu mã khôi phục của bạn', intro = '', onDone } = {}) {
+  openModal(`
+    <h3 class="card-title" style="margin-bottom:6px;padding-right:28px">${title}</h3>
+    ${intro ? `<p style="font-size:0.84rem;margin:0 0 8px">${intro}</p>` : ''}
+    <p style="font-size:0.83rem;color:var(--text-muted);margin:0 0 12px">
+      Đây là cách <strong>duy nhất</strong> để lấy lại tài khoản nếu bạn quên mật khẩu. Mã <strong>chỉ hiển thị một lần</strong> và chỉ dùng được một lần.
+      Hãy chụp màn hình, sao chép hoặc tải file về và cất ở nơi an toàn.
+    </p>
+    <div class="panda-recovery-code" id="rc-code">${esc(code)}</div>
+    <div style="display:flex;gap:8px;margin:10px 0">
+      <button type="button" class="btn btn-outline btn-sm" style="flex:1" id="rc-copy">📋 Sao chép mã</button>
+      <button type="button" class="btn btn-outline btn-sm" style="flex:1" id="rc-download">📥 Tải file .txt</button>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:0.85rem;cursor:pointer;margin:6px 0 12px">
+      <input type="checkbox" id="rc-ack" style="width:auto" /> Tôi đã lưu mã khôi phục ở nơi an toàn
+    </label>
+    <button type="button" class="btn btn-primary btn-block" id="rc-done" disabled>Tiếp tục vào học 🚀</button>
+  `);
+  const ack = document.getElementById('rc-ack');
+  const done = document.getElementById('rc-done');
+  ack.onchange = () => { done.disabled = !ack.checked; };
+  document.getElementById('rc-copy').onclick = async (e) => {
+    const btn = e.currentTarget;
+    try {
+      await navigator.clipboard.writeText(code);
+      btn.textContent = '✅ Đã sao chép';
+    } catch {
+      const range = document.createRange();
+      range.selectNodeContents(document.getElementById('rc-code'));
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      btn.textContent = 'Đã chọn mã — nhấn Ctrl+C';
+    }
+  };
+  document.getElementById('rc-download').onclick = () => {
+    const text = [
+      'PANDA HSK — MÃ KHÔI PHỤC TÀI KHOẢN',
+      '',
+      `Tên đăng nhập: ${username ? '@' + username : '(tài khoản của bạn)'}`,
+      `Mã khôi phục : ${code}`,
+      `Tạo lúc      : ${new Date().toLocaleString('vi-VN')}`,
+      '',
+      'Dùng mã này tại "Quên mật khẩu?" trong cửa sổ Đăng nhập.',
+      'Mã chỉ dùng được 1 lần. Không chia sẻ mã này cho bất kỳ ai.'
+    ].join('\r\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+    a.download = `panda-hsk-ma-khoi-phuc${username ? '-' + username : ''}.txt`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  };
+  modalBeforeClose = () => ack.checked
+    || confirm('Bạn chưa xác nhận đã lưu mã khôi phục. Sau khi đóng, mã sẽ KHÔNG hiển thị lại. Vẫn đóng?');
+  modalAfterClose = onDone || null;
+  done.onclick = () => closeModal();
+}
+
+async function renderRecoveryStatus() {
+  const el = document.getElementById('prof-rc-status');
+  if (!el) return;
+  const has = await authHasRecoveryCode();
+  if (!document.body.contains(el)) return;
+  if (has === true) {
+    el.innerHTML = '✅ Tài khoản đã có mã khôi phục. Tạo mã mới sẽ làm mã cũ mất hiệu lực.';
+    el.style.color = '#16a34a';
+  } else if (has === false) {
+    el.innerHTML = '⚠️ Tài khoản <strong>chưa có mã khôi phục</strong>. Hãy tạo ngay để không bị mất tài khoản khi quên mật khẩu.';
+    el.style.color = '#b45309';
+  } else {
+    el.textContent = 'Không kiểm tra được trạng thái mã khôi phục.';
+    el.style.color = 'var(--text-muted)';
+  }
+}
+
 function openProfileAccountModal() {
   const p = store.state.profile;
   openModal(`
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-right:30px">
       <div>
-        <h3 class="card-title" style="margin:0">${p.avatar || '🐼'} Hồ Sơ & Dữ Liệu Đám Mây</h3>
-        <div style="font-size:0.8rem;color:var(--text-muted)">Tên đăng nhập: <strong>@${store.currentUsername}</strong></div>
+        <h3 class="card-title" style="margin:0">${esc(p.avatar || '🐼')} Hồ Sơ &amp; Bảo Mật Tài Khoản</h3>
+        <div style="font-size:0.8rem;color:var(--text-muted)">Tên đăng nhập: <strong>@${esc(store.currentUsername)}</strong></div>
       </div>
       <button class="btn btn-outline btn-sm" id="btn-logout-now">Đăng xuất</button>
     </div>
     <div style="display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--surface-alt);margin-bottom:12px">
-      <div style="font-weight:700;font-size:0.88rem">✏️ Thông tin hiển thị & Bảng xếp hạng</div>
-      <input class="panda-input" type="text" id="prof-display-name" value="${p.name}" placeholder="Tên hiển thị..." />
+      <div style="font-weight:700;font-size:0.88rem">✏️ Thông tin hiển thị &amp; Bảng xếp hạng</div>
+      <input class="panda-input" type="text" id="prof-display-name" value="${esc(p.name)}" maxlength="60" placeholder="Tên hiển thị..." />
       <label style="display:flex;align-items:center;gap:8px;font-size:0.84rem;cursor:pointer">
         <input type="checkbox" id="prof-hide-lb" ${p.hideOnLeaderboard ? 'checked' : ''} style="width:auto" />
         Ẩn tên và điểm trên Bảng xếp hạng công khai
       </label>
       <button class="btn btn-primary btn-sm" id="btn-save-prof">💾 Lưu thay đổi hồ sơ</button>
     </div>
-    <div style="display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--border);border-radius:12px;margin-bottom:12px">
+    <form id="form-change-pass" class="panda-auth-form" novalidate style="gap:8px;padding:12px;border:1px solid var(--border);border-radius:12px;margin-bottom:12px">
       <div style="font-weight:700;font-size:0.88rem">🔑 Đổi mật khẩu</div>
-      <div class="panda-pass-wrap">
-        <input class="panda-pass-input" type="password" id="prof-new-pass" placeholder="Mật khẩu mới (tối thiểu 6 ký tự)" autocomplete="new-password" />
-        <button type="button" class="panda-eye-btn" id="prof-toggle-pass" aria-label="Hiện mật khẩu" aria-pressed="false">👁️</button>
-      </div>
-      <button class="btn btn-outline btn-sm" id="btn-change-pass">Cập nhật mật khẩu</button>
+      <input type="text" name="username" value="${esc(store.currentUsername)}" autocomplete="username" hidden />
+      ${passwordFieldHtml('prof-cur-pass', 'Mật khẩu hiện tại', 'Nhập mật khẩu hiện tại...', 'current-password')}
+      ${passwordFieldHtml('prof-new-pass', `Mật khẩu mới (≥ ${MIN_PASSWORD} ký tự, có chữ và số)`, 'Nhập mật khẩu mới...', 'new-password')}
+      ${strengthMeterHtml('prof-strength')}
+      <div class="panda-caps-warn hidden" data-caps-warn>⇪ Caps Lock đang bật</div>
+      <button type="submit" class="btn btn-outline btn-sm" id="btn-change-pass">Cập nhật mật khẩu</button>
       <div id="prof-pass-msg" style="font-size:0.8rem"></div>
+    </form>
+    <div style="display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--border);border-radius:12px;margin-bottom:12px">
+      <div style="font-weight:700;font-size:0.88rem">🛟 Mã khôi phục (dùng khi quên mật khẩu)</div>
+      <div id="prof-rc-status" style="font-size:0.8rem;color:var(--text-muted)">Đang kiểm tra...</div>
+      <div class="panda-pass-wrap">
+        <input class="panda-pass-input" type="password" id="prof-rc-pass" placeholder="Nhập mật khẩu hiện tại để tạo mã mới..." autocomplete="current-password" />
+        <button type="button" class="panda-eye-btn" data-toggle-target="prof-rc-pass" aria-label="Hiện mật khẩu" aria-pressed="false">👁️</button>
+      </div>
+      <button class="btn btn-outline btn-sm" id="btn-new-rc">🔄 Tạo mã khôi phục mới</button>
+      <div id="prof-rc-msg" style="font-size:0.8rem;color:#dc2626"></div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
       <button class="btn btn-green btn-sm" style="flex:1" id="btn-export-data">📥 Xuất dữ liệu (JSON)</button>
@@ -197,13 +366,11 @@ function openProfileAccountModal() {
     </div>
   `);
 
-  document.getElementById('prof-toggle-pass').onclick = (e) => {
-    const inp = document.getElementById('prof-new-pass');
-    const isHidden = inp.type === 'password';
-    inp.type = isHidden ? 'text' : 'password';
-    e.currentTarget.setAttribute('aria-pressed', String(isHidden));
-    e.currentTarget.setAttribute('aria-label', isHidden ? 'Ẩn mật khẩu' : 'Hiện mật khẩu');
-  };
+  const body = document.getElementById('modal-body');
+  wirePasswordToggles(body);
+  wireCapsLockWarning(body);
+  wireStrengthMeter('prof-new-pass', 'prof-strength');
+  renderRecoveryStatus();
 
   document.getElementById('btn-logout-now').onclick = async () => {
     await authLogout();
@@ -213,7 +380,7 @@ function openProfileAccountModal() {
     renderView(currentTab);
   };
   document.getElementById('btn-save-prof').onclick = async () => {
-    const newName = document.getElementById('prof-display-name').value.trim();
+    const newName = document.getElementById('prof-display-name').value.replace(/[<>"'`]/g, '').trim().slice(0, 60);
     if (newName) store.state.profile.name = newName;
     store.state.profile.hideOnLeaderboard = document.getElementById('prof-hide-lb').checked;
     store.save();
@@ -223,11 +390,44 @@ function openProfileAccountModal() {
     renderView(currentTab);
     alert('Đã lưu thông tin hồ sơ!');
   };
-  document.getElementById('btn-change-pass').onclick = async () => {
-    const res = await authChangePassword(document.getElementById('prof-new-pass').value);
+  document.getElementById('form-change-pass').onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('btn-change-pass');
     const msgEl = document.getElementById('prof-pass-msg');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="panda-spinner" style="border-top-color:var(--primary)"></span>Đang cập nhật...';
+    const res = await authChangePassword(
+      document.getElementById('prof-cur-pass').value,
+      document.getElementById('prof-new-pass').value
+    );
+    btn.disabled = false;
+    btn.textContent = 'Cập nhật mật khẩu';
     msgEl.style.color = res.ok ? '#16a34a' : '#dc2626';
     msgEl.textContent = res.ok ? '✅ Đã đổi mật khẩu thành công!' : res.error;
+    if (res.ok) {
+      document.getElementById('prof-cur-pass').value = '';
+      document.getElementById('prof-new-pass').value = '';
+    }
+  };
+  document.getElementById('btn-new-rc').onclick = async (e) => {
+    const btn = e.currentTarget;
+    const msgEl = document.getElementById('prof-rc-msg');
+    msgEl.textContent = '';
+    btn.disabled = true;
+    btn.innerHTML = '<span class="panda-spinner" style="border-top-color:var(--primary)"></span>Đang tạo mã...';
+    const res = await authCreateRecoveryCode(document.getElementById('prof-rc-pass').value);
+    btn.disabled = false;
+    btn.textContent = '🔄 Tạo mã khôi phục mới';
+    if (!res.ok) {
+      msgEl.textContent = res.error;
+      return;
+    }
+    showRecoveryCodeScreen(res.recoveryCode, {
+      username: store.currentUsername,
+      title: '🔐 Mã khôi phục mới của bạn',
+      intro: 'Mã khôi phục cũ (nếu có) đã mất hiệu lực.',
+      onDone: openProfileAccountModal
+    });
   };
   document.getElementById('btn-export-data').onclick = async () => {
     const res = await exportUserCloudData();
@@ -255,6 +455,10 @@ function openProfileAccountModal() {
   };
 }
 
+const LAST_USERNAME_KEY = 'panda_hsk_last_username';
+const readLastUsername = () => { try { return localStorage.getItem(LAST_USERNAME_KEY) || ''; } catch { return ''; } };
+const rememberUsername = (u) => { try { if (u) localStorage.setItem(LAST_USERNAME_KEY, u); } catch {} };
+
 function openAuthModal(defaultMode = 'login') {
   if (store.user) {
     openProfileAccountModal();
@@ -262,14 +466,48 @@ function openAuthModal(defaultMode = 'login') {
   }
   let selectedAvatar = '🐼';
   let isSubmitting = false;
+  let userCheckTimer = null;
+  let userCheckSeq = 0;
 
-  const onAuthSuccess = async (user) => {
-    await store.bindUser(user);
-    updateTopbar();
-    closeModal();
+  const finalizeAuth = async () => {
     cloudLeaderboard = await fetchLeaderboard();
     await checkGuestAndLegacyMigrationPrompt();
     renderView(currentTab);
+  };
+
+  const onAuthSuccess = async (user, recoveryCode = null, intro = '') => {
+    if (user) {
+      await store.bindUser(user);
+      updateTopbar();
+      rememberUsername(store.currentUsername);
+    }
+    if (recoveryCode) {
+      showRecoveryCodeScreen(recoveryCode, {
+        username: store.currentUsername || '',
+        intro,
+        onDone: user ? finalizeAuth : () => openAuthModal('login')
+      });
+      return;
+    }
+    closeModal();
+    await finalizeAuth();
+  };
+
+  const runSubmit = async (btnId, busyText, idleText, task) => {
+    if (isSubmitting) return;
+    const btn = document.getElementById(btnId);
+    isSubmitting = true;
+    btn.disabled = true;
+    btn.innerHTML = `<span class="panda-spinner"></span>${busyText}`;
+    try {
+      await task();
+    } finally {
+      isSubmitting = false;
+      if (document.body.contains(btn)) {
+        btn.disabled = false;
+        btn.textContent = idleText;
+      }
+    }
   };
 
   const renderAuth = (mode) => {
@@ -279,35 +517,28 @@ function openAuthModal(defaultMode = 'login') {
           ⚠️ Chưa phát hiện biến môi trường: <strong>${conn.missingEnv.join(', ')}</strong>. Bạn vẫn có thể bấm ✕ để học ở <strong>Chế độ Khách</strong>.
         </div>`
       : '';
+    const guestBtn = `<button type="button" class="btn btn-outline btn-block btn-sm" id="btn-continue-guest">Tiếp tục học ở Chế độ Khách</button>`;
+    const capsWarn = `<div class="panda-caps-warn hidden" data-caps-warn>⇪ Caps Lock đang bật</div>`;
 
-    openModal(`
-      <h3 class="card-title" style="margin-bottom:6px;padding-right:28px">🐼 Tài Khoản Panda HSK</h3>
-      <p style="font-size:0.83rem;color:var(--text-muted);margin:0 0 12px">
-        Đăng nhập để đồng bộ tiến độ đa thiết bị, hoặc đóng cửa sổ này để tiếp tục học ở <strong>Chế độ Khách</strong>.
-      </p>
-      ${envNotice}
-      <div style="display:flex;gap:8px;margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:10px">
-        <button type="button" class="btn ${mode === 'login' ? 'btn-primary' : 'btn-outline'} btn-sm" style="flex:1" id="tab-mode-login">🔑 Đăng nhập</button>
-        <button type="button" class="btn ${mode === 'register' ? 'btn-primary' : 'btn-outline'} btn-sm" style="flex:1" id="tab-mode-reg">✨ Tạo tài khoản mới</button>
-      </div>
-      ${mode === 'login' ? `
+    let formHtml = '';
+    if (mode === 'login') {
+      formHtml = `
         <form class="panda-auth-form" id="form-login" novalidate>
           <div class="panda-field-group">
             <label class="panda-field-label" for="auth-user">Tên đăng nhập</label>
-            <input class="panda-input" type="text" id="auth-user" name="username" placeholder="VD: tieu1710" autocomplete="username" autocapitalize="none" spellcheck="false" />
+            <input class="panda-input" type="text" id="auth-user" name="username" placeholder="VD: tieu1710" autocomplete="username" autocapitalize="none" spellcheck="false" value="${esc(readLastUsername())}" />
           </div>
-          <div class="panda-field-group">
-            <label class="panda-field-label" for="auth-pass">Mật khẩu</label>
-            <div class="panda-pass-wrap">
-              <input class="panda-pass-input" type="password" id="auth-pass" name="password" placeholder="Nhập mật khẩu..." autocomplete="current-password" />
-              <button type="button" class="panda-eye-btn" data-toggle-target="auth-pass" aria-label="Hiện mật khẩu" aria-pressed="false">👁️</button>
-            </div>
+          ${passwordFieldHtml('auth-pass', 'Mật khẩu', 'Nhập mật khẩu...', 'current-password')}
+          ${capsWarn}
+          <div style="display:flex;justify-content:flex-end;margin-top:-4px">
+            <button type="button" class="panda-link-btn" id="btn-go-forgot">Quên mật khẩu?</button>
           </div>
           <div id="auth-err" class="panda-auth-error hidden" role="alert"></div>
           <button type="submit" class="btn btn-primary btn-block" id="btn-submit-login">Đăng nhập vào Panda HSK</button>
-          <button type="button" class="btn btn-outline btn-block btn-sm" id="btn-continue-guest">Tiếp tục học ở Chế độ Khách</button>
-        </form>
-      ` : `
+          ${guestBtn}
+        </form>`;
+    } else if (mode === 'register') {
+      formHtml = `
         <form class="panda-auth-form" id="form-register" novalidate>
           <div class="panda-field-group">
             <span class="panda-field-label">Chọn biểu tượng đại diện</span>
@@ -317,33 +548,67 @@ function openAuthModal(defaultMode = 'login') {
           </div>
           <div class="panda-field-group">
             <label class="panda-field-label" for="reg-name">Tên hiển thị</label>
-            <input class="panda-input" type="text" id="reg-name" name="name" placeholder="VD: Lê Tiêu" autocomplete="name" />
+            <input class="panda-input" type="text" id="reg-name" name="name" placeholder="VD: Lê Tiêu" autocomplete="nickname" maxlength="60" />
           </div>
           <div class="panda-field-group">
             <label class="panda-field-label" for="reg-user">Tên đăng nhập (không dấu)</label>
-            <input class="panda-input" type="text" id="reg-user" name="username" placeholder="VD: tieu1710" autocomplete="username" autocapitalize="none" spellcheck="false" />
+            <input class="panda-input" type="text" id="reg-user" name="username" placeholder="VD: tieu1710" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="24" />
+            <div class="panda-hint" id="reg-user-hint"></div>
           </div>
-          <div class="panda-field-group">
-            <label class="panda-field-label" for="reg-pass">Mật khẩu (tối thiểu 6 ký tự)</label>
-            <div class="panda-pass-wrap">
-              <input class="panda-pass-input" type="password" id="reg-pass" name="new-password" placeholder="Nhập mật khẩu..." autocomplete="new-password" />
-              <button type="button" class="panda-eye-btn" data-toggle-target="reg-pass" aria-label="Hiện mật khẩu" aria-pressed="false">👁️</button>
-            </div>
-          </div>
-          <div class="panda-field-group">
-            <label class="panda-field-label" for="reg-pass2">Nhập lại mật khẩu</label>
-            <div class="panda-pass-wrap">
-              <input class="panda-pass-input" type="password" id="reg-pass2" name="confirm-password" placeholder="Nhập lại mật khẩu..." autocomplete="new-password" />
-              <button type="button" class="panda-eye-btn" data-toggle-target="reg-pass2" aria-label="Hiện mật khẩu xác nhận" aria-pressed="false">👁️</button>
-            </div>
-          </div>
+          ${passwordFieldHtml('reg-pass', `Mật khẩu (≥ ${MIN_PASSWORD} ký tự, có chữ và số)`, 'Nhập mật khẩu...', 'new-password')}
+          ${strengthMeterHtml('reg-strength')}
+          ${passwordFieldHtml('reg-pass2', 'Nhập lại mật khẩu', 'Nhập lại mật khẩu...', 'new-password')}
+          ${capsWarn}
+          <input type="text" name="website" id="reg-website" class="panda-hp" tabindex="-1" autocomplete="off" aria-hidden="true" />
           <div id="auth-err" class="panda-auth-error hidden" role="alert"></div>
-          <button type="submit" class="btn btn-green btn-block" id="btn-submit-reg">🚀 Tạo tài khoản & Vào học ngay</button>
-          <button type="button" class="btn btn-outline btn-block btn-sm" id="btn-continue-guest">Tiếp tục học ở Chế độ Khách</button>
-        </form>
-      `}
+          <div style="font-size:0.76rem;color:var(--text-muted);line-height:1.4">
+            Bằng việc tạo tài khoản, bạn đồng ý với <a href="#terms" id="lnk-terms" style="color:var(--primary)">Điều khoản sử dụng</a> và
+            <a href="#privacy" id="lnk-privacy" style="color:var(--primary)">Chính sách bảo mật</a>. Không cần email — sau khi tạo, bạn sẽ nhận <strong>mã khôi phục</strong> để lấy lại tài khoản khi quên mật khẩu.
+          </div>
+          <button type="submit" class="btn btn-green btn-block" id="btn-submit-reg">🚀 Tạo tài khoản &amp; Vào học ngay</button>
+          ${guestBtn}
+        </form>`;
+    } else {
+      formHtml = `
+        <form class="panda-auth-form" id="form-forgot" novalidate>
+          <p style="font-size:0.82rem;color:var(--text-muted);margin:0">
+            Nhập tên đăng nhập và <strong>mã khôi phục</strong> bạn đã lưu khi tạo tài khoản để đặt mật khẩu mới.
+          </p>
+          <div class="panda-field-group">
+            <label class="panda-field-label" for="fg-user">Tên đăng nhập</label>
+            <input class="panda-input" type="text" id="fg-user" name="username" placeholder="VD: tieu1710" autocomplete="username" autocapitalize="none" spellcheck="false" value="${esc(readLastUsername())}" />
+          </div>
+          <div class="panda-field-group">
+            <label class="panda-field-label" for="fg-code">Mã khôi phục</label>
+            <input class="panda-input" type="text" id="fg-code" name="recovery-code" placeholder="XXXX-XXXX-XXXX-XXXX" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" maxlength="24" style="font-family:ui-monospace,Consolas,monospace;letter-spacing:1px" />
+          </div>
+          ${passwordFieldHtml('fg-pass', `Mật khẩu mới (≥ ${MIN_PASSWORD} ký tự, có chữ và số)`, 'Nhập mật khẩu mới...', 'new-password')}
+          ${strengthMeterHtml('fg-strength')}
+          ${passwordFieldHtml('fg-pass2', 'Nhập lại mật khẩu mới', 'Nhập lại mật khẩu mới...', 'new-password')}
+          ${capsWarn}
+          <div id="auth-err" class="panda-auth-error hidden" role="alert"></div>
+          <button type="submit" class="btn btn-primary btn-block" id="btn-submit-forgot">🔓 Đặt lại mật khẩu &amp; Đăng nhập</button>
+          <button type="button" class="btn btn-outline btn-block btn-sm" id="btn-back-login">← Quay lại Đăng nhập</button>
+          <div style="font-size:0.76rem;color:var(--text-muted);line-height:1.4">
+            Mất cả mã khôi phục? Hãy gửi yêu cầu qua trang <a href="#contact" id="lnk-contact" style="color:var(--primary)">Liên hệ &amp; Góp ý</a> kèm tên đăng nhập.
+          </div>
+        </form>`;
+    }
+
+    openModal(`
+      <h3 class="card-title" style="margin-bottom:6px;padding-right:28px">${mode === 'forgot' ? '🔓 Khôi Phục Mật Khẩu' : '🐼 Tài Khoản Panda HSK'}</h3>
+      ${mode === 'forgot' ? '' : `<p style="font-size:0.83rem;color:var(--text-muted);margin:0 0 12px">
+        Đăng nhập để đồng bộ tiến độ đa thiết bị, hoặc đóng cửa sổ này để tiếp tục học ở <strong>Chế độ Khách</strong>.
+      </p>`}
+      ${envNotice}
+      ${mode === 'forgot' ? '' : `<div style="display:flex;gap:8px;margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:10px">
+        <button type="button" class="btn ${mode === 'login' ? 'btn-primary' : 'btn-outline'} btn-sm" style="flex:1" id="tab-mode-login">🔑 Đăng nhập</button>
+        <button type="button" class="btn ${mode === 'register' ? 'btn-primary' : 'btn-outline'} btn-sm" style="flex:1" id="tab-mode-reg">✨ Tạo tài khoản mới</button>
+      </div>`}
+      ${formHtml}
     `);
 
+    const body = document.getElementById('modal-body');
     const errEl = document.getElementById('auth-err');
     const showError = (msg) => {
       if (!errEl) return;
@@ -355,102 +620,131 @@ function openAuthModal(defaultMode = 'login') {
       errEl.textContent = '';
       errEl.classList.add('hidden');
     };
+    const val = (id) => document.getElementById(id)?.value || '';
+    const goPublic = (id, tab) => {
+      const el = document.getElementById(id);
+      if (el) el.onclick = (e) => { e.preventDefault(); closeModal(); switchTab(tab); };
+    };
 
-    document.querySelectorAll('#modal-body input').forEach((inp) => {
-      inp.addEventListener('input', clearError);
-    });
+    body.querySelectorAll('input').forEach((inp) => inp.addEventListener('input', clearError));
+    wirePasswordToggles(body);
+    wireCapsLockWarning(body);
+    goPublic('lnk-terms', 'terms');
+    goPublic('lnk-privacy', 'privacy');
+    goPublic('lnk-contact', 'contact');
 
-    document.getElementById('tab-mode-login').onclick = () => { if (!isSubmitting) renderAuth('login'); };
-    document.getElementById('tab-mode-reg').onclick = () => { if (!isSubmitting) renderAuth('register'); };
-    document.getElementById('btn-continue-guest').onclick = closeModal;
+    const tabLogin = document.getElementById('tab-mode-login');
+    const tabReg = document.getElementById('tab-mode-reg');
+    if (tabLogin) tabLogin.onclick = () => { if (!isSubmitting) renderAuth('login'); };
+    if (tabReg) tabReg.onclick = () => { if (!isSubmitting) renderAuth('register'); };
+    const guest = document.getElementById('btn-continue-guest');
+    if (guest) guest.onclick = closeModal;
 
-    document.querySelectorAll('[data-toggle-target]').forEach((btn) => {
-      btn.onclick = () => {
-        const inp = document.getElementById(btn.dataset.toggleTarget);
-        if (!inp) return;
-        const willShow = inp.type === 'password';
-        inp.type = willShow ? 'text' : 'password';
-        btn.textContent = willShow ? '🙈' : '👁️';
-        btn.setAttribute('aria-pressed', String(willShow));
-        btn.setAttribute('aria-label', willShow ? 'Ẩn mật khẩu' : 'Hiện mật khẩu');
-      };
-    });
-
-    document.querySelectorAll('[data-pick-av]').forEach((b) => {
-      b.onclick = () => {
-        selectedAvatar = b.dataset.pickAv;
-        document.querySelectorAll('[data-pick-av]').forEach((x) => {
-          x.style.borderColor = 'var(--border)';
-        });
-        b.style.borderColor = 'var(--primary)';
-      };
-    });
-
+    // ----- Đăng nhập -----
     const loginForm = document.getElementById('form-login');
     if (loginForm) {
-      loginForm.onsubmit = async (e) => {
+      const userInp = document.getElementById('auth-user');
+      (userInp.value ? document.getElementById('auth-pass') : userInp).focus();
+      document.getElementById('btn-go-forgot').onclick = () => { if (!isSubmitting) renderAuth('forgot'); };
+      loginForm.onsubmit = (e) => {
         e.preventDefault();
-        if (isSubmitting) return;
         clearError();
-        const btn = document.getElementById('btn-submit-login');
-        isSubmitting = true;
-        btn.disabled = true;
-        btn.innerHTML = `<span class="panda-spinner"></span>Đang đăng nhập...`;
-        try {
-          const res = await authLogin({
-            username: document.getElementById('auth-user').value,
-            password: document.getElementById('auth-pass').value
-          });
-          if (!res.ok) {
-            showError(res.error);
-            return;
-          }
+        runSubmit('btn-submit-login', 'Đang đăng nhập...', 'Đăng nhập vào Panda HSK', async () => {
+          const res = await authLogin({ username: val('auth-user'), password: val('auth-pass') });
+          if (!res.ok) return showError(res.error);
           await onAuthSuccess(res.user);
-        } finally {
-          isSubmitting = false;
-          if (document.body.contains(btn)) {
-            btn.disabled = false;
-            btn.textContent = 'Đăng nhập vào Panda HSK';
-          }
-        }
+        });
       };
     }
 
+    // ----- Đăng ký -----
     const regForm = document.getElementById('form-register');
     if (regForm) {
-      regForm.onsubmit = async (e) => {
+      document.getElementById('reg-name').focus();
+      wireStrengthMeter('reg-pass', 'reg-strength');
+      document.querySelectorAll('[data-pick-av]').forEach((b) => {
+        b.onclick = () => {
+          selectedAvatar = b.dataset.pickAv;
+          document.querySelectorAll('[data-pick-av]').forEach((x) => { x.style.borderColor = 'var(--border)'; });
+          b.style.borderColor = 'var(--primary)';
+        };
+      });
+
+      const regUser = document.getElementById('reg-user');
+      const hint = document.getElementById('reg-user-hint');
+      const setHint = (text, tone = '') => {
+        hint.textContent = text;
+        hint.dataset.tone = tone;
+      };
+      regUser.addEventListener('input', () => {
+        const lower = regUser.value.toLowerCase().replace(/\s+/g, '');
+        if (lower !== regUser.value) regUser.value = lower;
+        clearTimeout(userCheckTimer);
+        const seq = ++userCheckSeq;
+        if (!lower) return setHint('');
+        const local = validateUsername(lower);
+        if (!local.ok) return setHint(local.error, 'bad');
+        setHint('Đang kiểm tra tên đăng nhập...', 'muted');
+        userCheckTimer = setTimeout(async () => {
+          const r = await checkUsernameAvailability(lower);
+          if (seq !== userCheckSeq) return;
+          if (r.available === true) setHint('✅ Tên đăng nhập có thể sử dụng', 'ok');
+          else if (r.available === false) setHint(`❌ ${r.reason || 'Tên đăng nhập đã có người sử dụng.'}`, 'bad');
+          else setHint('');
+        }, 450);
+      });
+
+      regForm.onsubmit = (e) => {
         e.preventDefault();
-        if (isSubmitting) return;
         clearError();
-        const p1 = document.getElementById('reg-pass').value;
-        const p2 = document.getElementById('reg-pass2').value;
-        if (p1 !== p2) {
-          showError('Mật khẩu nhập lại không khớp.');
-          return;
-        }
-        const btn = document.getElementById('btn-submit-reg');
-        isSubmitting = true;
-        btn.disabled = true;
-        btn.innerHTML = `<span class="panda-spinner"></span>Đang tạo tài khoản...`;
-        try {
+        const p1 = val('reg-pass');
+        const pCheck = validateNewPassword(p1, val('reg-user'));
+        if (!pCheck.ok) return showError(pCheck.error);
+        if (p1 !== val('reg-pass2')) return showError('Mật khẩu nhập lại không khớp.');
+        runSubmit('btn-submit-reg', 'Đang tạo tài khoản...', '🚀 Tạo tài khoản & Vào học ngay', async () => {
           const res = await authRegister({
-            displayName: document.getElementById('reg-name').value,
-            username: document.getElementById('reg-user').value,
+            displayName: val('reg-name'),
+            username: val('reg-user'),
             password: p1,
-            avatar: selectedAvatar
+            avatar: selectedAvatar,
+            website: val('reg-website')
           });
-          if (!res.ok) {
-            showError(res.error);
-            return;
-          }
-          await onAuthSuccess(res.user);
-        } finally {
-          isSubmitting = false;
-          if (document.body.contains(btn)) {
-            btn.disabled = false;
-            btn.textContent = '🚀 Tạo tài khoản & Vào học ngay';
-          }
-        }
+          if (!res.ok) return showError(res.error);
+          await onAuthSuccess(res.user, res.recoveryCode, '🎉 Tạo tài khoản thành công!');
+        });
+      };
+    }
+
+    // ----- Quên mật khẩu -----
+    const forgotForm = document.getElementById('form-forgot');
+    if (forgotForm) {
+      wireStrengthMeter('fg-pass', 'fg-strength');
+      const userInp = document.getElementById('fg-user');
+      (userInp.value ? document.getElementById('fg-code') : userInp).focus();
+      const codeInp = document.getElementById('fg-code');
+      codeInp.addEventListener('input', () => {
+        const raw = codeInp.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16);
+        const formatted = raw.match(/.{1,4}/g)?.join('-') || '';
+        if (formatted !== codeInp.value) codeInp.value = formatted;
+      });
+      document.getElementById('btn-back-login').onclick = () => { if (!isSubmitting) renderAuth('login'); };
+      forgotForm.onsubmit = (e) => {
+        e.preventDefault();
+        clearError();
+        const p1 = val('fg-pass');
+        const pCheck = validateNewPassword(p1, val('fg-user'));
+        if (!pCheck.ok) return showError(pCheck.error);
+        if (p1 !== val('fg-pass2')) return showError('Mật khẩu nhập lại không khớp.');
+        runSubmit('btn-submit-forgot', 'Đang đặt lại mật khẩu...', '🔓 Đặt lại mật khẩu & Đăng nhập', async () => {
+          const res = await authResetPassword({
+            username: val('fg-user'),
+            recoveryCode: val('fg-code'),
+            newPassword: p1
+          });
+          if (!res.ok) return showError(res.error);
+          rememberUsername(validateUsername(val('fg-user')).username);
+          await onAuthSuccess(res.user, res.recoveryCode, '✅ Đã đặt lại mật khẩu! Mã khôi phục cũ đã hết hiệu lực — đây là mã mới.');
+        });
       };
     }
   };
@@ -627,7 +921,7 @@ function renderView(tab) {
           <div class="card">
             <div class="card-header"><h3 class="card-title">🏆 BẢNG XẾP HẠNG PANDA</h3><span class="badge-pill">HSK 1 – 9</span></div>
             <div class="rank-list">
-              ${leaderboard.map((u, idx) => `<div class="rank-row" style="${u.isReal ? 'border:1px solid var(--primary);' : ''}"><span><strong>#${idx + 1}</strong> ${u.avatar} ${u.name} · Lv.${u.lv}</span><span class="rank-badge">${u.xp} XP</span></div>`).join('')}
+              ${leaderboard.map((u, idx) => `<div class="rank-row" style="${u.isReal ? 'border:1px solid var(--primary);' : ''}"><span><strong>#${idx + 1}</strong> ${esc(u.avatar)} ${esc(u.name)} · Lv.${u.lv}</span><span class="rank-badge">${u.xp} XP</span></div>`).join('')}
             </div>
           </div>
           <div class="card">

@@ -14,7 +14,8 @@ globalThis.window = {
   localStorage: globalThis.localStorage,
   addEventListener: () => {}
 };
-globalThis.navigator = { onLine: true };
+// Node >= 21 co san globalThis.navigator chi-doc → ghi de bang defineProperty
+Object.defineProperty(globalThis, 'navigator', { value: { onLine: true }, writable: true, configurable: true });
 
 import configHandler from '../api/config.js';
 import {
@@ -84,7 +85,7 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = 'secret_should_never_expose';
 
 const shortPassRes = await authRegister({ username: 'tieu1710', password: '123', displayName: 'Le Tieu' });
 assert.equal(shortPassRes.ok, false);
-assert.ok(shortPassRes.error.includes('6 ký tự'));
+assert.ok(shortPassRes.error.includes('8 ký tự'));
 
 // Kiem tra /api/config khong bao gio lo SERVICE_ROLE_KEY va da trim()
 const cfgRes = await (await fetch('./api/config')).json();
@@ -122,7 +123,7 @@ assert.ok(words.length > 100, `Expected > 100 words, got ${words.length}`);
 for (let lv = 1; lv <= 9; lv++) {
   assert.ok(countWordsByLevel(words, lv) > 0, `HSK ${lv} khong duoc rong`);
 }
-const summary = computeVocabSummary(words, { '你好': { streak: 3 } });
+const summary = computeVocabSummary(words, { '爱': { streak: 3 } });
 assert.equal(summary.total, words.length);
 assert.equal(summary.mastered, 1);
 
