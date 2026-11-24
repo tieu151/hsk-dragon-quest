@@ -653,60 +653,87 @@ function openAuthModal(defaultMode = 'login') {
     const openSocialOneTap = (provider) => {
       const isGoogle = provider === 'google';
       const brandName = isGoogle ? 'Google' : 'Facebook';
-      const brandColor = isGoogle ? '#4285F4' : '#1877F2';
+      const brandColor = isGoogle ? '#0b57d0' : '#1877F2';
       const savedProfiles = getSavedSocialProfiles(provider);
+      const modalCard = document.querySelector('#modal-backdrop .modal-card');
+      if (modalCard) modalCard.classList.add('is-google-chooser');
+
+      const restoreCardClass = () => {
+        if (modalCard) modalCard.classList.remove('is-google-chooser');
+      };
 
       openModal(`
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;padding-right:28px">
-          <div style="width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:${isGoogle ? '#f8fafc' : '#eff6ff'};border:1px solid var(--border)">
+        <div class="gchooser-shell">
+          <div class="gchooser-topbar">
             ${isGoogle
-              ? '<svg width="22" height="22" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>'
-              : '<svg width="22" height="22" viewBox="0 0 24 24"><path fill="#1877F2" d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>'}
+              ? '<svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>'
+              : '<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path fill="#1877F2" d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>'}
+            <span>Đăng nhập bằng ${brandName}</span>
           </div>
-          <div>
-            <h3 class="card-title" style="margin:0">Chọn tài khoản ${brandName}</h3>
-            <div style="font-size:0.8rem;color:var(--text-muted)">Bấm chọn 1 tài khoản để vào thẳng <strong>Panda HSK</strong></div>
-          </div>
-        </div>
 
-        <div style="display:flex;flex-direction:column;gap:8px;margin:12px 0">
-          ${savedProfiles
-            .map(
-              (sp) => `
-              <button type="button" class="panda-onetap-account" data-onetap-email="${esc(sp.email)}" data-onetap-name="${esc(sp.displayName)}" data-onetap-avatar="${esc(sp.avatar)}">
-                <span style="font-size:1.5rem;width:38px;height:38px;border-radius:50%;background:var(--surface-alt);display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border)">${esc(sp.avatar)}</span>
-                <div style="text-align:left;flex:1">
-                  <div style="font-weight:800;font-size:0.93rem;color:var(--text)">${esc(sp.displayName)}</div>
-                  <div style="font-size:0.8rem;color:var(--text-muted)">${esc(sp.email)}</div>
+          <div class="gchooser-body">
+            <div class="gchooser-left">
+              <h2 class="gchooser-title">Chọn tài khoản</h2>
+              <div class="gchooser-sub">Tiếp tục tới <span style="color:${brandColor};font-weight:600">Panda HSK</span></div>
+              <button type="button" class="panda-link-btn" id="btn-social-back" style="margin-top:24px;font-size:0.84rem;color:#444746">← Quay lại</button>
+            </div>
+
+            <div class="gchooser-right-wrap">
+              <div class="gchooser-list" id="gchooser-scroll-list">
+                ${savedProfiles
+                  .map(
+                    (sp) => `
+                    <button type="button" class="gchooser-row" data-onetap-email="${esc(sp.email)}" data-onetap-name="${esc(sp.displayName)}" data-onetap-avatar="${esc(sp.avatar)}">
+                      <span class="gchooser-avatar" style="background:${esc(sp.badgeBg || '#c5221f')}">${esc(sp.badge || sp.displayName.slice(0, 1).toUpperCase())}</span>
+                      <div class="gchooser-info">
+                        <div class="gchooser-name">${esc(sp.displayName)}</div>
+                        <div class="gchooser-email">${esc(sp.email)}</div>
+                      </div>
+                    </button>`
+                  )
+                  .join('')}
+
+                <button type="button" class="gchooser-row" id="btn-show-custom-social">
+                  <span class="gchooser-avatar" style="background:transparent;color:#444746;border:1.5px solid #747775;font-size:1rem">👤+</span>
+                  <div class="gchooser-info">
+                    <div class="gchooser-name">Sử dụng một tài khoản khác</div>
+                  </div>
+                </button>
+              </div>
+              <button type="button" class="gchooser-scroll-fab" id="btn-gchooser-down" aria-label="Cuộn xuống" title="Xem thêm tài khoản">↓</button>
+
+              <form class="panda-auth-form hidden" id="form-social-onetap" novalidate style="margin-top:12px;padding:12px;border-radius:12px;background:var(--surface-alt);border:1px solid var(--border)">
+                <div class="panda-field-group">
+                  <label class="panda-field-label" for="soc-email">${isGoogle ? 'Nhập Gmail khác' : 'Nhập tài khoản Facebook khác'}</label>
+                  <input class="panda-input" type="email" id="soc-email" placeholder="${isGoogle ? 'tenban@gmail.com' : 'tenban@facebook.com'}" autocomplete="email" autocapitalize="none" spellcheck="false" />
                 </div>
-                <span style="font-size:0.82rem;font-weight:800;color:${brandColor}">Chọn →</span>
-              </button>`
-            )
-            .join('')}
-
-          <button type="button" class="panda-onetap-account" id="btn-show-custom-social" style="justify-content:center;color:var(--text-muted);font-weight:700;font-size:0.85rem;border-style:dashed">
-            ➕ Sử dụng một tài khoản ${brandName} khác
-          </button>
-        </div>
-
-        <form class="panda-auth-form hidden" id="form-social-onetap" novalidate style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
-          <div class="panda-field-group">
-            <label class="panda-field-label" for="soc-email">${isGoogle ? 'Địa chỉ Gmail' : 'Tài khoản Facebook'}</label>
-            <input class="panda-input" type="email" id="soc-email" placeholder="${isGoogle ? 'tenban@gmail.com' : 'tenban@facebook.com'}" autocomplete="email" autocapitalize="none" spellcheck="false" />
+                <div id="soc-err" class="panda-auth-error hidden" role="alert"></div>
+                <button type="submit" class="btn btn-primary btn-block" id="btn-submit-social" style="background:${brandColor};border-color:${brandColor}">
+                  Tiếp tục
+                </button>
+              </form>
+            </div>
           </div>
-          <div id="soc-err" class="panda-auth-error hidden" role="alert"></div>
-          <button type="submit" class="btn btn-primary btn-block" id="btn-submit-social" style="background:${brandColor};border-color:${brandColor}">
-            🚀 Tiếp tục
-          </button>
-        </form>
-
-        <button type="button" class="btn btn-outline btn-block btn-sm" id="btn-social-back" style="margin-top:6px">← Quay lại</button>
+        </div>
       `);
 
-      document.getElementById('btn-social-back').onclick = () => renderAuth(mode);
+      modalAfterClose = restoreCardClass;
+      document.getElementById('btn-social-back').onclick = () => {
+        restoreCardClass();
+        renderAuth(mode);
+      };
+      const scrollList = document.getElementById('gchooser-scroll-list');
+      const downFab = document.getElementById('btn-gchooser-down');
+      if (downFab && scrollList) {
+        downFab.onclick = () => {
+          scrollList.scrollBy({ top: 200, behavior: 'smooth' });
+        };
+      }
+
       document.querySelectorAll('[data-onetap-email]').forEach((btn) => {
         btn.onclick = async () => {
           btn.disabled = true;
+          restoreCardClass();
           const res = await authSocialSignIn({
             provider,
             email: btn.dataset.onetapEmail,
@@ -721,7 +748,6 @@ function openAuthModal(defaultMode = 'login') {
       const showCustomBtn = document.getElementById('btn-show-custom-social');
       if (showCustomBtn) {
         showCustomBtn.onclick = () => {
-          showCustomBtn.classList.add('hidden');
           socForm.classList.remove('hidden');
           document.getElementById('soc-email')?.focus();
         };
@@ -741,6 +767,7 @@ function openAuthModal(defaultMode = 'login') {
           errBox.classList.remove('hidden');
           return;
         }
+        restoreCardClass();
         if (res.user) await onAuthSuccess(res.user);
       };
     };

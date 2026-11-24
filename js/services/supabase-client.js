@@ -185,6 +185,30 @@ function toPublicUserObject(acc) {
   };
 }
 
+const DEFAULT_GOOGLE_CHOOSER_ACCOUNTS = [
+  { username: 'tentoilatieu', displayName: 'Tiêu Lê Khả', email: 'tentoilatieu@gmail.com', badge: 'T', badgeBg: '#c5221f', avatar: '🐼', provider: 'google' },
+  { username: 'tieule2k5', displayName: 'tiêu lê khả', email: 'tieule2k5@gmail.com', badge: 'T', badgeBg: '#e65100', avatar: '🐉', provider: 'google' },
+  { username: 'tieuletieu1', displayName: 'le tieu', email: 'tieuletieu1@gmail.com', badge: 'le', badgeBg: '#7b1fa2', avatar: '🐯', provider: 'google' },
+  { username: 'lepham2055', displayName: 'hoạt hình Nhật phim', email: 'lepham2055@gmail.com', badge: 'H', badgeBg: '#5d4037', avatar: '🦊', provider: 'google' },
+  { username: 'thanhphong201188', displayName: 'Phong Thanh', email: 'thanhphong201188@gmail.com', badge: 'P', badgeBg: '#bf360c', avatar: '🦁', provider: 'google' },
+  { username: 'bibotbien555', displayName: 'Tiêu Lê', email: 'bibotbien555@gmail.com', badge: 'T', badgeBg: '#d84315', avatar: '🐰', provider: 'google' },
+  { username: 'tien2341aa', displayName: 'Tiến Phan tien', email: 'tien2341aa@gmail.com', badge: 'T', badgeBg: '#2e4c59', avatar: '🦅', provider: 'google' },
+  { username: 'faifi786', displayName: 'Fai FI', email: 'faifi786@gmail.com', badge: 'F', badgeBg: '#e64a19', avatar: '🦄', provider: 'google' },
+  { username: 'lepham2057', displayName: 'Phạm Lê', email: 'lepham2057@gmail.com', badge: 'P', badgeBg: '#b71c1c', avatar: '🐼', provider: 'google' },
+  { username: 'tieu171005', displayName: 'tiêu tiên', email: 'tieu171005@gmail.com', badge: 't', badgeBg: '#7986cb', avatar: '🐉', provider: 'google' }
+];
+
+const DEFAULT_FACEBOOK_CHOOSER_ACCOUNTS = [
+  { username: 'tentoilatieu_fb', displayName: 'Tiêu Lê Khả', email: 'tentoilatieu@gmail.com', badge: 'T', badgeBg: '#1877F2', avatar: '🐼', provider: 'facebook' },
+  { username: 'tieule2k5_fb', displayName: 'Tiêu Lê', email: 'tieule2k5@gmail.com', badge: 'T', badgeBg: '#0d47a1', avatar: '🐉', provider: 'facebook' },
+  { username: 'thanhphong_fb', displayName: 'Phong Thanh', email: 'thanhphong201188@gmail.com', badge: 'P', badgeBg: '#1565c0', avatar: '🦁', provider: 'facebook' }
+];
+
+function computeInitialBadge(name, email) {
+  const src = String(name || email || 'U').trim();
+  return src.slice(0, 1).toUpperCase();
+}
+
 export function getSavedSocialProfiles(provider = '') {
   const accounts = Object.values(loadVaultAccounts());
   const saved = accounts
@@ -194,48 +218,22 @@ export function getSavedSocialProfiles(provider = '') {
       username: a.username,
       displayName: a.displayName || a.username,
       email: a.socialEmail || a.email,
+      badge: a.badge || computeInitialBadge(a.displayName, a.socialEmail),
+      badgeBg: a.badgeBg || (a.provider === 'facebook' ? '#1877F2' : '#c5221f'),
       avatar: a.avatar || '🐼',
       provider: a.provider
     }));
 
-  if (saved.length > 0) return saved;
-
-  // Danh sách tài khoản 1 chạm mặc định để người dùng bấm chọn vào thẳng ngay lập tức không cần gõ phím
-  if (provider === 'facebook') {
-    return [
-      {
-        username: 'tieu151_fb',
-        displayName: 'Lê Tiêu',
-        email: 'tieu151@facebook.com',
-        avatar: '🐉',
-        provider: 'facebook'
-      },
-      {
-        username: 'hocvien_fb',
-        displayName: 'Học Viên Panda (Facebook)',
-        email: 'hocvien.panda@facebook.com',
-        avatar: '🐼',
-        provider: 'facebook'
-      }
-    ];
-  }
-
-  return [
-    {
-      username: 'tieu151',
-      displayName: 'Lê Tiêu',
-      email: 'tieu151@gmail.com',
-      avatar: '🐼',
-      provider: 'google'
-    },
-    {
-      username: 'hocvien_gg',
-      displayName: 'Học Viên Panda (Google)',
-      email: 'hocvien.panda@gmail.com',
-      avatar: '🐯',
-      provider: 'google'
+  const defaults = provider === 'facebook' ? DEFAULT_FACEBOOK_CHOOSER_ACCOUNTS : DEFAULT_GOOGLE_CHOOSER_ACCOUNTS;
+  const seenEmails = new Set(saved.map((s) => String(s.email || '').toLowerCase()));
+  const merged = [...saved];
+  for (const item of defaults) {
+    if (!seenEmails.has(item.email.toLowerCase())) {
+      merged.push(item);
+      seenEmails.add(item.email.toLowerCase());
     }
-  ];
+  }
+  return merged;
 }
 
 function sanitizeEmailToUsername(rawInput, provider = 'google') {

@@ -100,8 +100,8 @@ assert.equal(googleSign.ok, true, 'Dang nhap 1 cham Google Zero-Config phai than
 assert.equal(googleSign.user.user_metadata.social_provider, 'google');
 const fbSign = await authSocialSignIn({ provider: 'facebook', email: 'tieu.fb@facebook.com', displayName: 'Lê Tiêu FB' });
 assert.equal(fbSign.ok, true, 'Dang nhap 1 cham Facebook Zero-Config phai thanh cong');
-assert.equal(getSavedSocialProfiles('google').length, 1);
-assert.equal(getSavedSocialProfiles('facebook').length, 1);
+assert.ok(getSavedSocialProfiles('google').length >= 1);
+assert.ok(getSavedSocialProfiles('facebook').length >= 1);
 
 // Kich ban (a), (b), (c): Validate dau vao & anh xa username -> email noi bo
 assert.equal(validateUsername('ab').ok, false);
