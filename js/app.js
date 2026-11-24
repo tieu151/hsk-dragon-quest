@@ -2,12 +2,26 @@ import { store } from './storage/db.js';
 import { dataLoader } from './data/loader.js';
 import { EXAM_CONFIGS, launchExamUI } from './exam/exam-engine.js';
 import {
-  getSupabase, authRegister, authLogin, authChangePassword, authLogout,
-  fetchLeaderboard, exportUserCloudData, deleteAccountOnServer
+  getSupabase,
+  getSupabaseConnectionStatus,
+  authRegister,
+  authLogin,
+  authChangePassword,
+  authLogout,
+  fetchLeaderboard,
+  exportUserCloudData,
+  deleteAccountOnServer
 } from './services/supabase-client.js';
 import {
-  renderSpeakModule, renderVideoModule, renderPlacementModule, renderWritingModule,
-  renderDictionaryModule, renderStatsModule, renderArenaModule, renderPublicPage, openReportErrorModal
+  renderSpeakModule,
+  renderVideoModule,
+  renderPlacementModule,
+  renderWritingModule,
+  renderDictionaryModule,
+  renderStatsModule,
+  renderArenaModule,
+  renderPublicPage,
+  openReportErrorModal
 } from './features/modules.js';
 
 const LEVELS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
@@ -17,7 +31,6 @@ const PUBLIC_TABS = new Set(['home', 'about-hsk', 'privacy', 'terms', 'contact']
 
 let currentTab = 'home';
 let ALL_WORDS = [];
-let pendingAction = null;
 let cloudLeaderboard = [];
 
 function speakZh(text) {
@@ -37,7 +50,11 @@ function getWordStatus(rec) {
 
 function recordWord(hanzi, isCorrect) {
   const prev = store.state.srs[hanzi] || { streak: 0, reviews: 0 };
-  store.state.srs[hanzi] = { streak: isCorrect ? prev.streak + 1 : 0, reviews: prev.reviews + 1, lastReview: new Date().toISOString().slice(0, 10) };
+  store.state.srs[hanzi] = {
+    streak: isCorrect ? prev.streak + 1 : 0,
+    reviews: prev.reviews + 1,
+    lastReview: new Date().toISOString().slice(0, 10)
+  };
   store.dirtyWords.add(hanzi);
   store.save();
 }
@@ -45,8 +62,14 @@ function recordWord(hanzi, isCorrect) {
 function renderSyncBadge(status) {
   const el = document.getElementById('ui-sync-status');
   if (!el) return;
-  if (!store.user) { el.textContent = '☁️ Chế độ Khách'; el.style.color = 'var(--text-muted)'; return; }
+  if (!store.user) {
+    el.textContent = '☁️ Chế độ Khách';
+    el.style.color = 'var(--text-muted)';
+    el.title = 'Tiến độ đang lưu tạm trên trình duyệt. Bấm để đăng nhập và đồng bộ đám mây.';
+    return;
+  }
   const map = {
+    guest: ['☁️ Chế độ Khách', 'var(--text-muted)'],
     idle: ['☁️ Sẵn sàng', 'var(--text-muted)'],
     syncing: ['🔄 Đang đồng bộ...', '#d97706'],
     saved: ['☁️ Đã lưu', '#16a34a'],
@@ -61,7 +84,10 @@ function renderSyncBadge(status) {
 function updateTopbar() {
   const p = store.state.profile;
   const lvl = Math.floor(p.xp / 100) + 1;
-  const setTxt = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  const setTxt = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+  };
   setTxt('ui-level', `Cấp ${lvl} · ${levelLabel(p.activeWorld)}`);
   setTxt('ui-streak', `🔥 ${p.streak}`);
   setTxt('ui-coins', `🪙 ${p.coins}`);
@@ -80,45 +106,53 @@ function openModal(html) {
   document.getElementById('modal-body').innerHTML = html;
   document.getElementById('modal-backdrop').classList.remove('hidden');
 }
+
 function closeModal() {
   document.getElementById('modal-backdrop').classList.add('hidden');
 }
 
-function requireAuth(actionFn) {
-  if (store.user) { actionFn(); return; }
-  pendingAction = actionFn;
-  openAuthModal('login', true);
-}
+async function checkGuestAndLegacyMigrationPrompt() {
+  if (!store.user) return;
+  const pendingList = store.detectPendingLocalProgress();
+  if (!pendingList || !pendingList.length) return;
 
-async function checkLegacyMigrationPrompt() {
-  const legacyList = store.detectLegacyLocalData();
-  if (!legacyList || !legacyList.length) return;
-  if (legacyList.length === 1 && store.state.profile.xp === 0 && Object.keys(store.state.srs).length === 0) {
-    const res = await store.migrateLegacyState(legacyList[0].state);
-    if (res.ok) { updateTopbar(); renderView(currentTab); }
-    return;
-  }
   openModal(`
-    <h3 class="card-title">📦 Tìm thấy dữ liệu học tập cũ trên máy này</h3>
-    <p style="font-size:0.88rem;color:var(--text-muted);margin:8px 0">Gộp tiến độ cũ vào tài khoản <strong>@${store.currentUsername}</strong>?</p>
+    <h3 class="card-title">📦 Đồng bộ tiến độ học tập trên máy này?</h3>
+    <p style="font-size:0.88rem;color:var(--text-muted);margin:8px 0">
+      Hệ thống phát hiện dữ liệu học tập cục bộ chưa đồng bộ. Bạn có muốn gộp vào tài khoản <strong>@${store.currentUsername}</strong> không?
+    </p>
     <div style="display:flex;flex-direction:column;gap:8px;margin:12px 0">
-      ${legacyList.map((item, idx) => `
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px;border:1px solid var(--border);border-radius:10px">
-          <div><strong>${item.displayName}</strong> (@${item.username}) · ${item.wordCount} từ · ${item.xp} XP</div>
-          <button class="btn btn-primary btn-sm" data-mig-idx="${idx}">Gộp ngay</button>
+      ${pendingList.map((item, idx) => `
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px;border:1px solid var(--border);border-radius:10px">
+          <div style="font-size:0.86rem">
+            <strong>${item.displayName}</strong>
+            <div style="color:var(--text-muted)">${item.wordCount} từ đã luyện · ${item.xp} XP</div>
+          </div>
+          <button class="btn btn-primary btn-sm" data-mig-idx="${idx}">Đồng bộ ngay</button>
         </div>`).join('')}
     </div>
-    <button class="btn btn-outline btn-block btn-sm" id="btn-skip-mig">Bỏ qua</button>
+    <button class="btn btn-outline btn-block btn-sm" id="btn-skip-mig">Bỏ qua (Giữ nguyên dữ liệu tài khoản)</button>
   `);
+
   document.querySelectorAll('[data-mig-idx]').forEach((b) => {
     b.onclick = async () => {
       b.disabled = true;
-      const res = await store.migrateLegacyState(legacyList[Number(b.dataset.migIdx)].state);
+      b.innerHTML = `<span class="panda-spinner"></span>Đang gộp...`;
+      const target = pendingList[Number(b.dataset.migIdx)];
+      const res = await store.mergeLocalProgressIntoCloud(target);
       closeModal();
-      if (res.ok) { updateTopbar(); renderView(currentTab); alert('Đã gộp dữ liệu cũ lên tài khoản!'); }
+      if (res.ok) {
+        updateTopbar();
+        renderView(currentTab);
+        alert('Đã đồng bộ tiến độ cục bộ lên tài khoản thành công!');
+      }
     };
   });
-  document.getElementById('btn-skip-mig').onclick = () => { store.markLegacySkipped(); closeModal(); };
+
+  document.getElementById('btn-skip-mig').onclick = () => {
+    store.markLegacySkipped(true);
+    closeModal();
+  };
 }
 
 function openProfileAccountModal() {
@@ -133,7 +167,7 @@ function openProfileAccountModal() {
     </div>
     <div style="display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--surface-alt);margin-bottom:12px">
       <div style="font-weight:700;font-size:0.88rem">✏️ Thông tin hiển thị & Bảng xếp hạng</div>
-      <input type="text" id="prof-display-name" value="${p.name}" placeholder="Tên hiển thị..." />
+      <input class="panda-input" type="text" id="prof-display-name" value="${p.name}" placeholder="Tên hiển thị..." />
       <label style="display:flex;align-items:center;gap:8px;font-size:0.84rem;cursor:pointer">
         <input type="checkbox" id="prof-hide-lb" ${p.hideOnLeaderboard ? 'checked' : ''} style="width:auto" />
         Ẩn tên và điểm trên Bảng xếp hạng công khai
@@ -142,10 +176,11 @@ function openProfileAccountModal() {
     </div>
     <div style="display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--border);border-radius:12px;margin-bottom:12px">
       <div style="font-weight:700;font-size:0.88rem">🔑 Đổi mật khẩu</div>
-      <div style="display:flex;gap:8px">
-        <input type="password" id="prof-new-pass" placeholder="Mật khẩu mới (tối thiểu 6 ký tự)" />
-        <button class="btn btn-outline btn-sm" id="btn-change-pass" style="flex-shrink:0">Cập nhật</button>
+      <div class="panda-pass-wrap">
+        <input class="panda-pass-input" type="password" id="prof-new-pass" placeholder="Mật khẩu mới (tối thiểu 6 ký tự)" autocomplete="new-password" />
+        <button type="button" class="panda-eye-btn" id="prof-toggle-pass" aria-label="Hiện mật khẩu" aria-pressed="false">👁️</button>
       </div>
+      <button class="btn btn-outline btn-sm" id="btn-change-pass">Cập nhật mật khẩu</button>
       <div id="prof-pass-msg" style="font-size:0.8rem"></div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
@@ -154,23 +189,38 @@ function openProfileAccountModal() {
     </div>
     <div id="del-account-box" class="hidden" style="padding:12px;border-radius:12px;background:#fef2f2;border:1px solid #fecaca">
       <div style="font-size:0.82rem;color:#b91c1c;font-weight:700;margin-bottom:8px">⚠️ Xóa vĩnh viễn tài khoản và toàn bộ dữ liệu học tập, không thể khôi phục!</div>
-      <div style="display:flex;gap:8px">
-        <input type="password" id="del-confirm-pass" placeholder="Nhập mật khẩu hiện tại..." />
-        <button class="btn btn-primary btn-sm" id="btn-confirm-del" style="background:#dc2626;flex-shrink:0">Xác nhận xóa</button>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <input class="panda-input" type="password" id="del-confirm-pass" placeholder="Nhập mật khẩu hiện tại..." autocomplete="current-password" />
+        <button class="btn btn-primary btn-sm" id="btn-confirm-del" style="background:#dc2626">Xác nhận xóa tài khoản</button>
       </div>
       <div id="del-err-msg" style="font-size:0.8rem;color:#dc2626;margin-top:6px"></div>
     </div>
   `);
 
+  document.getElementById('prof-toggle-pass').onclick = (e) => {
+    const inp = document.getElementById('prof-new-pass');
+    const isHidden = inp.type === 'password';
+    inp.type = isHidden ? 'text' : 'password';
+    e.currentTarget.setAttribute('aria-pressed', String(isHidden));
+    e.currentTarget.setAttribute('aria-label', isHidden ? 'Ẩn mật khẩu' : 'Hiện mật khẩu');
+  };
+
   document.getElementById('btn-logout-now').onclick = async () => {
-    await authLogout(); await store.bindUser(null); updateTopbar(); closeModal(); switchTab('home');
+    await authLogout();
+    await store.bindUser(null);
+    updateTopbar();
+    closeModal();
+    renderView(currentTab);
   };
   document.getElementById('btn-save-prof').onclick = async () => {
     const newName = document.getElementById('prof-display-name').value.trim();
     if (newName) store.state.profile.name = newName;
     store.state.profile.hideOnLeaderboard = document.getElementById('prof-hide-lb').checked;
-    store.save(); await store.flushToCloud(); updateTopbar();
-    cloudLeaderboard = await fetchLeaderboard(); renderView(currentTab);
+    store.save();
+    await store.flushToCloud();
+    updateTopbar();
+    cloudLeaderboard = await fetchLeaderboard();
+    renderView(currentTab);
     alert('Đã lưu thông tin hồ sơ!');
   };
   document.getElementById('btn-change-pass').onclick = async () => {
@@ -192,176 +242,280 @@ function openProfileAccountModal() {
   document.getElementById('btn-confirm-del').onclick = async () => {
     const uid = store.user?.id;
     const res = await deleteAccountOnServer(document.getElementById('del-confirm-pass').value);
-    if (!res.ok) { document.getElementById('del-err-msg').textContent = res.error; return; }
-    store.clearUserLocalCache(uid); await store.bindUser(null); updateTopbar(); closeModal(); switchTab('home');
+    if (!res.ok) {
+      document.getElementById('del-err-msg').textContent = res.error;
+      return;
+    }
+    store.clearUserLocalCache(uid);
+    await store.bindUser(null);
+    updateTopbar();
+    closeModal();
+    renderView(currentTab);
     alert('Tài khoản đã được xóa vĩnh viễn.');
   };
 }
 
-function openAuthModal(defaultMode = 'login', isGatePrompt = false) {
-  if (store.user) { openProfileAccountModal(); return; }
+function openAuthModal(defaultMode = 'login') {
+  if (store.user) {
+    openProfileAccountModal();
+    return;
+  }
   let selectedAvatar = '🐼';
+  let isSubmitting = false;
 
   const onAuthSuccess = async (user) => {
     await store.bindUser(user);
-    updateTopbar(); closeModal();
+    updateTopbar();
+    closeModal();
     cloudLeaderboard = await fetchLeaderboard();
-    await checkLegacyMigrationPrompt();
-    if (pendingAction) { const fn = pendingAction; pendingAction = null; fn(); }
-    else renderView(currentTab);
+    await checkGuestAndLegacyMigrationPrompt();
+    renderView(currentTab);
   };
 
   const renderAuth = (mode) => {
+    const conn = getSupabaseConnectionStatus();
+    const envNotice = conn.missingEnv.length
+      ? `<div style="padding:9px 11px;border-radius:10px;background:#fffbeb;border:1px solid #fde68a;color:#92400e;font-size:0.8rem;margin-bottom:10px">
+          ⚠️ Chưa phát hiện biến môi trường: <strong>${conn.missingEnv.join(', ')}</strong>. Bạn vẫn có thể bấm ✕ để học ở <strong>Chế độ Khách</strong>.
+        </div>`
+      : '';
+
     openModal(`
-      ${isGatePrompt ? `<div style="padding:10px 12px;border-radius:10px;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-size:0.85rem;font-weight:700;margin-bottom:10px">🔒 Vui lòng đăng nhập để học và lưu tiến độ vĩnh viễn.</div>` : ''}
-      <h3 class="card-title" style="margin-bottom:10px">🐼 Tài Khoản Panda HSK</h3>
+      <h3 class="card-title" style="margin-bottom:6px;padding-right:28px">🐼 Tài Khoản Panda HSK</h3>
+      <p style="font-size:0.83rem;color:var(--text-muted);margin:0 0 12px">
+        Đăng nhập để đồng bộ tiến độ đa thiết bị, hoặc đóng cửa sổ này để tiếp tục học ở <strong>Chế độ Khách</strong>.
+      </p>
+      ${envNotice}
       <div style="display:flex;gap:8px;margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:10px">
-        <button class="btn ${mode === 'login' ? 'btn-primary' : 'btn-outline'} btn-sm" style="flex:1" id="tab-mode-login">🔑 Đăng nhập</button>
-        <button class="btn ${mode === 'register' ? 'btn-primary' : 'btn-outline'} btn-sm" style="flex:1" id="tab-mode-reg">✨ Tạo tài khoản mới</button>
+        <button type="button" class="btn ${mode === 'login' ? 'btn-primary' : 'btn-outline'} btn-sm" style="flex:1" id="tab-mode-login">🔑 Đăng nhập</button>
+        <button type="button" class="btn ${mode === 'register' ? 'btn-primary' : 'btn-outline'} btn-sm" style="flex:1" id="tab-mode-reg">✨ Tạo tài khoản mới</button>
       </div>
       ${mode === 'login' ? `
-        <div style="display:flex;flex-direction:column;gap:10px">
-          <input type="text" id="auth-user" placeholder="Tên đăng nhập (VD: letieu01)" autocomplete="username" />
-          <div style="position:relative;display:flex;align-items:center">
-            <input type="password" id="auth-pass" placeholder="Mật khẩu..." autocomplete="current-password" style="padding-right:42px" />
-            <button type="button" id="toggle-pass-vis" style="position:absolute;right:10px;background:none;border:none;cursor:pointer;font-size:1rem">👁️</button>
+        <form class="panda-auth-form" id="form-login" novalidate>
+          <div class="panda-field-group">
+            <label class="panda-field-label" for="auth-user">Tên đăng nhập</label>
+            <input class="panda-input" type="text" id="auth-user" name="username" placeholder="VD: tieu1710" autocomplete="username" autocapitalize="none" spellcheck="false" />
           </div>
-          <div id="auth-err" style="color:#dc2626;font-size:0.82rem;font-weight:600"></div>
-          <button class="btn btn-primary btn-block" id="btn-submit-login">Đăng nhập vào Panda HSK</button>
-        </div>
+          <div class="panda-field-group">
+            <label class="panda-field-label" for="auth-pass">Mật khẩu</label>
+            <div class="panda-pass-wrap">
+              <input class="panda-pass-input" type="password" id="auth-pass" name="password" placeholder="Nhập mật khẩu..." autocomplete="current-password" />
+              <button type="button" class="panda-eye-btn" data-toggle-target="auth-pass" aria-label="Hiện mật khẩu" aria-pressed="false">👁️</button>
+            </div>
+          </div>
+          <div id="auth-err" class="panda-auth-error hidden" role="alert"></div>
+          <button type="submit" class="btn btn-primary btn-block" id="btn-submit-login">Đăng nhập vào Panda HSK</button>
+          <button type="button" class="btn btn-outline btn-block btn-sm" id="btn-continue-guest">Tiếp tục học ở Chế độ Khách</button>
+        </form>
       ` : `
-        <div style="display:flex;flex-direction:column;gap:10px">
-          <div style="font-size:0.82rem;font-weight:700">Chọn biểu tượng đại diện:</div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
-            ${AVATARS.map((av) => `<button type="button" class="btn btn-outline btn-sm" data-pick-av="${av}" style="font-size:1.2rem;border-color:${av === selectedAvatar ? 'var(--primary)' : 'var(--border)'}">${av}</button>`).join('')}
+        <form class="panda-auth-form" id="form-register" novalidate>
+          <div class="panda-field-group">
+            <span class="panda-field-label">Chọn biểu tượng đại diện</span>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              ${AVATARS.map((av) => `<button type="button" class="btn btn-outline btn-sm" data-pick-av="${av}" style="font-size:1.15rem;border-color:${av === selectedAvatar ? 'var(--primary)' : 'var(--border)'}">${av}</button>`).join('')}
+            </div>
           </div>
-          <input type="text" id="reg-name" placeholder="Tên hiển thị (VD: Lê Tiêu)" />
-          <input type="text" id="reg-user" placeholder="Tên đăng nhập không dấu (VD: letieu01)" autocomplete="username" />
-          <div style="position:relative;display:flex;align-items:center">
-            <input type="password" id="reg-pass" placeholder="Mật khẩu (tối thiểu 6 ký tự)" autocomplete="new-password" style="padding-right:42px" />
-            <button type="button" id="toggle-pass-vis" style="position:absolute;right:10px;background:none;border:none;cursor:pointer;font-size:1rem">👁️</button>
+          <div class="panda-field-group">
+            <label class="panda-field-label" for="reg-name">Tên hiển thị</label>
+            <input class="panda-input" type="text" id="reg-name" name="name" placeholder="VD: Lê Tiêu" autocomplete="name" />
           </div>
-          <input type="password" id="reg-pass2" placeholder="Nhập lại mật khẩu..." autocomplete="new-password" />
-          <div id="auth-err" style="color:#dc2626;font-size:0.82rem;font-weight:600"></div>
-          <button class="btn btn-green btn-block" id="btn-submit-reg">🚀 Tạo tài khoản & Vào học ngay</button>
-        </div>
+          <div class="panda-field-group">
+            <label class="panda-field-label" for="reg-user">Tên đăng nhập (không dấu)</label>
+            <input class="panda-input" type="text" id="reg-user" name="username" placeholder="VD: tieu1710" autocomplete="username" autocapitalize="none" spellcheck="false" />
+          </div>
+          <div class="panda-field-group">
+            <label class="panda-field-label" for="reg-pass">Mật khẩu (tối thiểu 6 ký tự)</label>
+            <div class="panda-pass-wrap">
+              <input class="panda-pass-input" type="password" id="reg-pass" name="new-password" placeholder="Nhập mật khẩu..." autocomplete="new-password" />
+              <button type="button" class="panda-eye-btn" data-toggle-target="reg-pass" aria-label="Hiện mật khẩu" aria-pressed="false">👁️</button>
+            </div>
+          </div>
+          <div class="panda-field-group">
+            <label class="panda-field-label" for="reg-pass2">Nhập lại mật khẩu</label>
+            <div class="panda-pass-wrap">
+              <input class="panda-pass-input" type="password" id="reg-pass2" name="confirm-password" placeholder="Nhập lại mật khẩu..." autocomplete="new-password" />
+              <button type="button" class="panda-eye-btn" data-toggle-target="reg-pass2" aria-label="Hiện mật khẩu xác nhận" aria-pressed="false">👁️</button>
+            </div>
+          </div>
+          <div id="auth-err" class="panda-auth-error hidden" role="alert"></div>
+          <button type="submit" class="btn btn-green btn-block" id="btn-submit-reg">🚀 Tạo tài khoản & Vào học ngay</button>
+          <button type="button" class="btn btn-outline btn-block btn-sm" id="btn-continue-guest">Tiếp tục học ở Chế độ Khách</button>
+        </form>
       `}
     `);
 
-    document.getElementById('tab-mode-login').onclick = () => renderAuth('login');
-    document.getElementById('tab-mode-reg').onclick = () => renderAuth('register');
-    const toggleVis = document.getElementById('toggle-pass-vis');
-    if (toggleVis) {
-      toggleVis.onclick = () => {
-        const inp = document.getElementById(mode === 'login' ? 'auth-pass' : 'reg-pass');
-        if (inp) inp.type = inp.type === 'password' ? 'text' : 'password';
+    const errEl = document.getElementById('auth-err');
+    const showError = (msg) => {
+      if (!errEl) return;
+      errEl.textContent = msg;
+      errEl.classList.remove('hidden');
+    };
+    const clearError = () => {
+      if (!errEl) return;
+      errEl.textContent = '';
+      errEl.classList.add('hidden');
+    };
+
+    document.querySelectorAll('#modal-body input').forEach((inp) => {
+      inp.addEventListener('input', clearError);
+    });
+
+    document.getElementById('tab-mode-login').onclick = () => { if (!isSubmitting) renderAuth('login'); };
+    document.getElementById('tab-mode-reg').onclick = () => { if (!isSubmitting) renderAuth('register'); };
+    document.getElementById('btn-continue-guest').onclick = closeModal;
+
+    document.querySelectorAll('[data-toggle-target]').forEach((btn) => {
+      btn.onclick = () => {
+        const inp = document.getElementById(btn.dataset.toggleTarget);
+        if (!inp) return;
+        const willShow = inp.type === 'password';
+        inp.type = willShow ? 'text' : 'password';
+        btn.textContent = willShow ? '🙈' : '👁️';
+        btn.setAttribute('aria-pressed', String(willShow));
+        btn.setAttribute('aria-label', willShow ? 'Ẩn mật khẩu' : 'Hiện mật khẩu');
       };
-    }
+    });
+
     document.querySelectorAll('[data-pick-av]').forEach((b) => {
       b.onclick = () => {
         selectedAvatar = b.dataset.pickAv;
-        document.querySelectorAll('[data-pick-av]').forEach((x) => { x.style.borderColor = 'var(--border)'; });
+        document.querySelectorAll('[data-pick-av]').forEach((x) => {
+          x.style.borderColor = 'var(--border)';
+        });
         b.style.borderColor = 'var(--primary)';
       };
     });
 
-    if (document.getElementById('btn-submit-login')) {
-      const doLogin = async () => {
+    const loginForm = document.getElementById('form-login');
+    if (loginForm) {
+      loginForm.onsubmit = async (e) => {
+        e.preventDefault();
+        if (isSubmitting) return;
+        clearError();
         const btn = document.getElementById('btn-submit-login');
-        const errEl = document.getElementById('auth-err');
-        btn.disabled = true; btn.textContent = '⏳ Đang đăng nhập...';
-        const res = await authLogin({ username: document.getElementById('auth-user').value, password: document.getElementById('auth-pass').value });
-        btn.disabled = false; btn.textContent = 'Đăng nhập vào Panda HSK';
-        if (!res.ok) { errEl.textContent = res.error; return; }
-        await onAuthSuccess(res.user);
+        isSubmitting = true;
+        btn.disabled = true;
+        btn.innerHTML = `<span class="panda-spinner"></span>Đang đăng nhập...`;
+        try {
+          const res = await authLogin({
+            username: document.getElementById('auth-user').value,
+            password: document.getElementById('auth-pass').value
+          });
+          if (!res.ok) {
+            showError(res.error);
+            return;
+          }
+          await onAuthSuccess(res.user);
+        } finally {
+          isSubmitting = false;
+          if (document.body.contains(btn)) {
+            btn.disabled = false;
+            btn.textContent = 'Đăng nhập vào Panda HSK';
+          }
+        }
       };
-      document.getElementById('btn-submit-login').onclick = doLogin;
-      document.getElementById('auth-pass').onkeydown = (e) => { if (e.key === 'Enter') doLogin(); };
     }
 
-    if (document.getElementById('btn-submit-reg')) {
-      const doReg = async () => {
-        const btn = document.getElementById('btn-submit-reg');
-        const errEl = document.getElementById('auth-err');
+    const regForm = document.getElementById('form-register');
+    if (regForm) {
+      regForm.onsubmit = async (e) => {
+        e.preventDefault();
+        if (isSubmitting) return;
+        clearError();
         const p1 = document.getElementById('reg-pass').value;
         const p2 = document.getElementById('reg-pass2').value;
-        if (p1 !== p2) { errEl.textContent = 'Mật khẩu nhập lại không khớp.'; return; }
-        btn.disabled = true; btn.textContent = '⏳ Đang tạo tài khoản...';
-        const res = await authRegister({
-          displayName: document.getElementById('reg-name').value,
-          username: document.getElementById('reg-user').value,
-          password: p1, avatar: selectedAvatar
-        });
-        btn.disabled = false; btn.textContent = '🚀 Tạo tài khoản & Vào học ngay';
-        if (!res.ok) { errEl.textContent = res.error; return; }
-        await onAuthSuccess(res.user);
+        if (p1 !== p2) {
+          showError('Mật khẩu nhập lại không khớp.');
+          return;
+        }
+        const btn = document.getElementById('btn-submit-reg');
+        isSubmitting = true;
+        btn.disabled = true;
+        btn.innerHTML = `<span class="panda-spinner"></span>Đang tạo tài khoản...`;
+        try {
+          const res = await authRegister({
+            displayName: document.getElementById('reg-name').value,
+            username: document.getElementById('reg-user').value,
+            password: p1,
+            avatar: selectedAvatar
+          });
+          if (!res.ok) {
+            showError(res.error);
+            return;
+          }
+          await onAuthSuccess(res.user);
+        } finally {
+          isSubmitting = false;
+          if (document.body.contains(btn)) {
+            btn.disabled = false;
+            btn.textContent = '🚀 Tạo tài khoản & Vào học ngay';
+          }
+        }
       };
-      document.getElementById('btn-submit-reg').onclick = doReg;
-      document.getElementById('reg-pass2').onkeydown = (e) => { if (e.key === 'Enter') doReg(); };
     }
   };
+
   renderAuth(defaultMode);
 }
 
 function openAITutorModal() {
-  requireAuth(() => {
-    openModal(`
-      <h3 class="card-title">🐼 Sư Phụ AI Panda — Chuyên Gia Tiếng Trung</h3>
-      <div id="ai-chat-box" class="chat-stream"><div class="chat-msg ai"><strong>Sư phụ Panda:</strong> 你好！Bạn muốn hỏi gì về tiếng Trung hôm nay?</div></div>
-      <div style="display:flex;gap:8px;margin-top:8px">
-        <input type="text" id="ai-input" placeholder="Nhập câu hỏi..." maxlength="600" />
-        <button class="btn btn-primary" id="ai-send">Gửi</button>
-      </div>
-    `);
-    const send = async () => {
-      const inp = document.getElementById('ai-input');
-      const box = document.getElementById('ai-chat-box');
-      const msg = inp.value.trim();
-      if (!msg) return;
-      inp.value = '';
-      box.innerHTML += `<div class="chat-msg user">${msg}</div>`;
-      const lid = 'ai-l-' + Date.now();
-      box.innerHTML += `<div id="${lid}" class="chat-msg ai">⏳ Đang phân tích...</div>`;
-      try {
-        const res = await fetch('./api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Panda-User': store.currentUsername || 'guest' },
-          body: JSON.stringify({ message: msg })
-        });
-        const data = await res.json();
-        document.getElementById(lid).innerHTML = (data.reply || data.error || '').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
-      } catch { document.getElementById(lid).textContent = 'Lỗi kết nối AI.'; }
-      box.scrollTop = box.scrollHeight;
-    };
-    document.getElementById('ai-send').onclick = send;
-    document.getElementById('ai-input').onkeydown = (e) => { if (e.key === 'Enter') send(); };
-  });
+  openModal(`
+    <h3 class="card-title">🐼 Sư Phụ AI Panda — Chuyên Gia Tiếng Trung</h3>
+    <div id="ai-chat-box" class="chat-stream"><div class="chat-msg ai"><strong>Sư phụ Panda:</strong> 你好！Bạn muốn hỏi gì về tiếng Trung hôm nay?</div></div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <input class="panda-input" type="text" id="ai-input" placeholder="Nhập câu hỏi..." maxlength="600" />
+      <button class="btn btn-primary" id="ai-send">Gửi</button>
+    </div>
+  `);
+  const send = async () => {
+    const inp = document.getElementById('ai-input');
+    const box = document.getElementById('ai-chat-box');
+    const msg = inp.value.trim();
+    if (!msg) return;
+    inp.value = '';
+    box.innerHTML += `<div class="chat-msg user">${msg}</div>`;
+    const lid = 'ai-l-' + Date.now();
+    box.innerHTML += `<div id="${lid}" class="chat-msg ai">⏳ Đang phân tích...</div>`;
+    try {
+      const res = await fetch('./api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Panda-User': store.currentUsername || 'guest' },
+        body: JSON.stringify({ message: msg })
+      });
+      const data = await res.json();
+      document.getElementById(lid).innerHTML = (data.reply || data.error || '').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+    } catch {
+      document.getElementById(lid).textContent = 'Lỗi kết nối AI.';
+    }
+    box.scrollTop = box.scrollHeight;
+  };
+  document.getElementById('ai-send').onclick = send;
+  document.getElementById('ai-input').onkeydown = (e) => { if (e.key === 'Enter') send(); };
 }
 
 function openCreateDeckModal(onDone) {
-  requireAuth(() => {
-    openModal(`
-      <h3 class="card-title">➕ Tạo Bộ Thẻ Từ Vựng Mới</h3>
-      <p style="font-size:0.85rem;color:var(--text-muted)">Mỗi từ 1 dòng: <strong>Chữ Hán | Pinyin | Nghĩa Việt</strong></p>
-      <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">
-        <input type="text" id="deck-title-inp" placeholder="Tên bộ thẻ..." />
-        <textarea id="deck-words-inp" rows="5" placeholder="仓库 | cāngkù | nhà kho"></textarea>
-        <button class="btn btn-primary btn-block" id="btn-save-deck">💾 Lưu Bộ Thẻ</button>
-      </div>
-    `);
-    document.getElementById('btn-save-deck').onclick = () => {
-      const title = document.getElementById('deck-title-inp').value.trim();
-      const raw = document.getElementById('deck-words-inp').value.trim();
-      if (!title || !raw) return alert('Vui lòng nhập đầy đủ tên và từ vựng!');
-      const words = raw.split(/\r?\n/).map((line, i) => {
-        const [hanzi = '', pinyin = '', meaning = ''] = line.split('|').map((s) => s.trim());
-        return hanzi ? { id: `custom_${Date.now()}_${i}`, level: 1, hanzi, pinyin, meaning: meaning || 'Từ tự thêm' } : null;
-      }).filter(Boolean);
-      store.state.customDecks.unshift({ id: Date.now(), title, words });
-      store.save(); closeModal();
-      if (onDone) onDone();
-    };
-  });
+  openModal(`
+    <h3 class="card-title">➕ Tạo Bộ Thẻ Từ Vựng Mới</h3>
+    <p style="font-size:0.85rem;color:var(--text-muted)">Mỗi từ 1 dòng: <strong>Chữ Hán | Pinyin | Nghĩa Việt</strong></p>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">
+      <input class="panda-input" type="text" id="deck-title-inp" placeholder="Tên bộ thẻ..." />
+      <textarea id="deck-words-inp" rows="5" placeholder="仓库 | cāngkù | nhà kho"></textarea>
+      <button class="btn btn-primary btn-block" id="btn-save-deck">💾 Lưu Bộ Thẻ</button>
+    </div>
+  `);
+  document.getElementById('btn-save-deck').onclick = () => {
+    const title = document.getElementById('deck-title-inp').value.trim();
+    const raw = document.getElementById('deck-words-inp').value.trim();
+    if (!title || !raw) return alert('Vui lòng nhập đầy đủ tên và từ vựng!');
+    const words = raw.split(/\r?\n/).map((line, i) => {
+      const [hanzi = '', pinyin = '', meaning = ''] = line.split('|').map((s) => s.trim());
+      return hanzi ? { id: `custom_${Date.now()}_${i}`, level: 1, hanzi, pinyin, meaning: meaning || 'Từ tự thêm' } : null;
+    }).filter(Boolean);
+    store.state.customDecks.unshift({ id: Date.now(), title, words });
+    store.save();
+    closeModal();
+    if (onDone) onDone();
+  };
 }
 
 function startQuickQuiz(words, title = 'Luyện tập từ vựng', returnTab = 'home') {
@@ -372,7 +526,8 @@ function startQuickQuiz(words, title = 'Luyện tập từ vựng', returnTab = 
       store.state.profile.xp += score * 15;
       store.state.profile.coins += score * 3;
       store.state.profile.lastStudyDate = new Date().toISOString().slice(0, 10);
-      store.save(); updateTopbar();
+      store.save();
+      updateTopbar();
       document.getElementById('main-view').innerHTML = `
         <div class="card" style="text-align:center;max-width:520px;margin:0 auto">
           <h2>🎉 Hoàn thành: ${title}!</h2>
@@ -390,7 +545,7 @@ function startQuickQuiz(words, title = 'Luyện tập từ vựng', returnTab = 
       <div style="max-width:640px;margin:0 auto;width:100%;display:flex;flex-direction:column;gap:14px">
         <div class="card" style="text-align:center">
           <div style="display:flex;justify-content:space-between;font-size:0.84rem;color:var(--text-muted)">
-            <span>${title} · Câu ${idx + 1}/${words.length}</span>
+            <span>${title} · Từ ${idx + 1}/${words.length}</span>
             <button class="btn btn-outline btn-sm" id="btn-rep-q">🚩 Báo lỗi</button>
           </div>
           <div class="hanzi-xl" style="margin:14px 0 4px">${target.hanzi}</div>
@@ -407,8 +562,16 @@ function startQuickQuiz(words, title = 'Luyện tập từ vựng', returnTab = 
       btn.onclick = () => {
         const isOk = btn.dataset.hanzi === target.hanzi;
         recordWord(target.hanzi, isOk);
-        if (isOk) { score++; btn.classList.add('correct'); } else { btn.classList.add('wrong'); }
-        setTimeout(() => { idx++; renderQ(); }, 550);
+        if (isOk) {
+          score++;
+          btn.classList.add('correct');
+        } else {
+          btn.classList.add('wrong');
+        }
+        setTimeout(() => {
+          idx++;
+          renderQ();
+        }, 550);
       };
     });
   };
@@ -423,10 +586,19 @@ function renderView(tab) {
   const fresh = allWords.filter((w) => w.level === p.activeWorld && !store.state.srs[w.hanzi]).slice(0, 10);
   const customDecks = store.state.customDecks || [];
 
-  if (PUBLIC_TABS.has(tab) && tab !== 'home') { renderPublicPage(main, tab); return; }
+  if (PUBLIC_TABS.has(tab) && tab !== 'home') {
+    renderPublicPage(main, tab);
+    return;
+  }
 
   if (tab === 'home') {
-    const cloudRows = (cloudLeaderboard || []).map((r) => ({ name: r.display_name, avatar: r.avatar_url || '🐼', lv: r.level || 1, xp: Number(r.xp || 0), isReal: true }));
+    const cloudRows = (cloudLeaderboard || []).map((r) => ({
+      name: r.display_name,
+      avatar: r.avatar_url || '🐼',
+      lv: r.level || 1,
+      xp: Number(r.xp || 0),
+      isReal: true
+    }));
     const demoPlayers = [
       { name: 'Minh Anh', avatar: '🐯', lv: 24, xp: 2810, isReal: false },
       { name: 'Thảo Nhi', avatar: '🦊', lv: 17, xp: 2090, isReal: false },
@@ -440,7 +612,7 @@ function renderView(tab) {
           <div class="mascot-avatar">${p.avatar || '🐼'}</div>
           <div>
             <h1 class="hero-title">Chào mừng đến với Panda HSK, ${p.name}!</h1>
-            <p class="hero-sub">Kho từ vựng <strong>${allWords.length.toLocaleString()}</strong> từ (HSK 1–9) · ${store.user ? `Đã kết nối tài khoản <strong>@${store.currentUsername}</strong>` : 'Đăng nhập bằng Tên đăng nhập & Mật khẩu để lưu tiến độ vĩnh viễn'}</p>
+            <p class="hero-sub">Kho từ vựng <strong>${allWords.length.toLocaleString()} từ</strong> (HSK 1–9) · ${store.user ? `Đã kết nối tài khoản <strong>@${store.currentUsername}</strong>` : 'Đang học ở <strong>Chế độ Khách</strong> (lưu tự động trên trình duyệt)'}</p>
           </div>
         </div>
         <div class="hero-btns">
@@ -478,12 +650,12 @@ function renderView(tab) {
           </div>
 
           <div class="card">
-            <div class="card-header"><h3 class="card-title">✨ LỘ TRÌNH 9 CẤP ĐỘ (HSK 1 – HSK 9)</h3><button class="btn btn-gold btn-sm" id="btn-quick-review">🔁 Ôn tập (${due.length})</button></div>
+            <div class="card-header"><h3 class="card-title">✨ LỘ TRÌNH 9 CẤP ĐỘ (HSK 1 – HSK 9)</h3><button class="btn btn-gold btn-sm" id="btn-quick-review">🔁 Ôn tập (${due.length} từ)</button></div>
             <div class="deck-grid">
               ${LEVELS.map((l) => {
                 const lvlWords = allWords.filter((w) => w.level === l);
                 const learnedCnt = lvlWords.filter((w) => store.state.srs[w.hanzi]).length;
-                return `<div class="deck-card" data-open-journey="${l}"><div><div style="display:flex;justify-content:space-between;align-items:center"><strong style="color:var(--primary)">${levelLabel(l)}</strong><span class="badge-pill">${learnedCnt}/${lvlWords.length} từ</span></div><p style="font-size:0.8rem;color:var(--text-muted);margin:6px 0 0">Chia thành ${Math.max(1, Math.ceil(lvlWords.length / 50))} chương</p></div><button class="btn btn-primary btn-sm btn-block">🗺️ Học lộ trình</button></div>`;
+                return `<div class="deck-card" data-open-journey="${l}"><div><div style="display:flex;justify-content:space-between;align-items:center"><strong style="color:var(--primary)">${levelLabel(l)}</strong><span class="badge-pill">${learnedCnt}/${lvlWords.length} từ</span></div><p style="font-size:0.8rem;color:var(--text-muted);margin:6px 0 0">Tổng ${lvlWords.length.toLocaleString()} từ · ${Math.max(1, Math.ceil(lvlWords.length / 50))} chương</p></div><button class="btn btn-primary btn-sm btn-block">🗺️ Học lộ trình</button></div>`;
               }).join('')}
             </div>
           </div>
@@ -494,12 +666,31 @@ function renderView(tab) {
     document.getElementById('btn-hero-journey').onclick = () => switchTab('journey');
     document.getElementById('btn-hero-auth').onclick = () => openAuthModal('login');
     document.getElementById('btn-create-deck').onclick = () => openCreateDeckModal(() => renderView('home'));
-    if (document.getElementById('btn-create-deck-empty')) document.getElementById('btn-create-deck-empty').onclick = () => openCreateDeckModal(() => renderView('home'));
+    if (document.getElementById('btn-create-deck-empty')) {
+      document.getElementById('btn-create-deck-empty').onclick = () => openCreateDeckModal(() => renderView('home'));
+    }
     document.getElementById('btn-quick-review').onclick = () => switchTab('review');
-    document.querySelectorAll('[data-set-world]').forEach((b) => { b.onclick = () => { p.activeWorld = Number(b.dataset.setWorld); store.save(); updateTopbar(); renderView('home'); }; });
-    document.querySelectorAll('[data-open-journey]').forEach((card) => { card.onclick = () => { p.activeWorld = Number(card.dataset.openJourney); store.save(); updateTopbar(); switchTab('journey'); }; });
+    document.querySelectorAll('[data-set-world]').forEach((b) => {
+      b.onclick = () => {
+        p.activeWorld = Number(b.dataset.setWorld);
+        store.save();
+        updateTopbar();
+        renderView('home');
+      };
+    });
+    document.querySelectorAll('[data-open-journey]').forEach((card) => {
+      card.onclick = () => {
+        p.activeWorld = Number(card.dataset.openJourney);
+        store.save();
+        updateTopbar();
+        switchTab('journey');
+      };
+    });
     document.querySelectorAll('[data-play-deck]').forEach((card) => {
-      card.onclick = () => requireAuth(() => { const deck = customDecks.find((d) => String(d.id) === card.dataset.playDeck); if (deck) startQuickQuiz(deck.words, deck.title, 'home'); });
+      card.onclick = () => {
+        const deck = customDecks.find((d) => String(d.id) === card.dataset.playDeck);
+        if (deck) startQuickQuiz(deck.words, deck.title, 'home');
+      };
     });
   } else if (tab === 'journey') {
     let selectedChapter = 0;
@@ -513,7 +704,7 @@ function renderView(tab) {
       const totalLearnedInLevel = levelWords.filter((w) => store.state.srs[w.hanzi]).length;
       main.innerHTML = `
         <div class="page-hero">
-          <div><h1 class="hero-title">🗺️ Hành Trình Chinh Phục ${levelLabel(p.activeWorld)}</h1><p class="hero-sub">Tiến độ: đã học <strong>${totalLearnedInLevel}/${levelWords.length.toLocaleString()}</strong> từ</p></div>
+          <div><h1 class="hero-title">🗺️ Hành Trình ${levelLabel(p.activeWorld)} (${levelWords.length.toLocaleString()} từ)</h1><p class="hero-sub">Tiến độ: đã học <strong>${totalLearnedInLevel}/${levelWords.length.toLocaleString()} từ</strong></p></div>
           <div style="display:flex;flex-wrap:wrap;gap:6px">${LEVELS.map((l) => `<button class="btn ${p.activeWorld === l ? 'btn-primary' : 'btn-outline'} btn-sm" data-j-lvl="${l}">${levelLabel(l)}</button>`).join('')}</div>
         </div>
         <div class="two-col-grid">
@@ -524,19 +715,19 @@ function renderView(tab) {
                 const slice = levelWords.slice(cIdx * chapterSize, (cIdx + 1) * chapterSize);
                 const done = slice.filter((w) => store.state.srs[w.hanzi]).length;
                 const isAct = cIdx === selectedChapter;
-                return `<button class="btn ${isAct ? 'btn-primary' : 'btn-outline'}" style="justify-content:space-between;width:100%" data-chap="${cIdx}"><span>Chương ${cIdx + 1}</span><span class="badge-pill" style="${isAct ? 'color:#1e293b' : ''}">${done}/${slice.length}</span></button>`;
+                return `<button class="btn ${isAct ? 'btn-primary' : 'btn-outline'}" style="justify-content:space-between;width:100%" data-chap="${cIdx}"><span>Chương ${cIdx + 1}</span><span class="badge-pill" style="${isAct ? 'color:#1e293b' : ''}">${done}/${slice.length} từ</span></button>`;
               }).join('')}
             </div>
           </div>
           <div class="card">
-            <div class="card-header"><h3 class="card-title">🏯 Chương ${selectedChapter + 1}</h3><button class="btn btn-gold btn-sm" id="btn-test-chapter">🎯 Kiểm tra Chương ${selectedChapter + 1}</button></div>
+            <div class="card-header"><h3 class="card-title">🏯 Chương ${selectedChapter + 1} (${chapterWords.length} từ)</h3><button class="btn btn-gold btn-sm" id="btn-test-chapter">🎯 Kiểm tra Chương ${selectedChapter + 1}</button></div>
             <div style="display:flex;flex-direction:column;gap:12px">
               ${Array.from({ length: lessonsCount }, (_, lIdx) => {
                 const lw = chapterWords.slice(lIdx * 10, (lIdx + 1) * 10);
                 const doneCnt = lw.filter((w) => store.state.srs[w.hanzi]).length;
                 const pct = Math.round((doneCnt / Math.max(1, lw.length)) * 100);
                 return `<div style="padding:14px;border:1.5px solid var(--border);border-radius:14px;background:var(--bg)">
-                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><strong>Bài ${lIdx + 1}: ${lw.slice(0, 4).map((x) => x.hanzi).join(' · ')}...</strong><span class="badge-pill">${doneCnt}/${lw.length} (${pct}%)</span></div>
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><strong>Bài ${lIdx + 1}: ${lw.slice(0, 4).map((x) => x.hanzi).join(' · ')}...</strong><span class="badge-pill">${doneCnt}/${lw.length} từ (${pct}%)</span></div>
                   <div style="height:8px;background:var(--border);border-radius:999px;overflow:hidden;margin-bottom:10px"><div style="height:100%;width:${pct}%;background:var(--green)"></div></div>
                   <div style="display:flex;gap:8px"><button class="btn btn-outline btn-sm" data-preview-lesson="${lIdx}">👁️ Xem từ</button><button class="btn btn-primary btn-sm" data-study-lesson="${lIdx}">▶️ Vào học</button></div>
                 </div>`;
@@ -544,15 +735,33 @@ function renderView(tab) {
             </div>
           </div>
         </div>`;
-      document.querySelectorAll('[data-j-lvl]').forEach((b) => { b.onclick = () => { p.activeWorld = Number(b.dataset.jLvl); selectedChapter = 0; store.save(); updateTopbar(); renderJourney(); }; });
-      document.querySelectorAll('[data-chap]').forEach((b) => { b.onclick = () => { selectedChapter = Number(b.dataset.chap); renderJourney(); }; });
+      document.querySelectorAll('[data-j-lvl]').forEach((b) => {
+        b.onclick = () => {
+          p.activeWorld = Number(b.dataset.jLvl);
+          selectedChapter = 0;
+          store.save();
+          updateTopbar();
+          renderJourney();
+        };
+      });
+      document.querySelectorAll('[data-chap]').forEach((b) => {
+        b.onclick = () => {
+          selectedChapter = Number(b.dataset.chap);
+          renderJourney();
+        };
+      });
       document.getElementById('btn-test-chapter').onclick = () => startQuickQuiz(chapterWords.slice(0, 15), `Kiểm tra Chương ${selectedChapter + 1}`, 'journey');
-      document.querySelectorAll('[data-study-lesson]').forEach((b) => { b.onclick = () => { const i = Number(b.dataset.studyLesson); startQuickQuiz(chapterWords.slice(i * 10, (i + 1) * 10), `Chương ${selectedChapter + 1} - Bài ${i + 1}`, 'journey'); }; });
+      document.querySelectorAll('[data-study-lesson]').forEach((b) => {
+        b.onclick = () => {
+          const i = Number(b.dataset.studyLesson);
+          startQuickQuiz(chapterWords.slice(i * 10, (i + 1) * 10), `Chương ${selectedChapter + 1} - Bài ${i + 1}`, 'journey');
+        };
+      });
       document.querySelectorAll('[data-preview-lesson]').forEach((b) => {
         b.onclick = () => {
           const i = Number(b.dataset.previewLesson);
           const lw = chapterWords.slice(i * 10, (i + 1) * 10);
-          openModal(`<h3 class="card-title">📖 Từ vựng Bài ${i + 1}</h3><div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">${lw.map((w) => `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border:1px solid var(--border);border-radius:10px"><div><strong class="hanzi-md">${w.hanzi}</strong> <span style="color:var(--primary)">${w.pinyin}</span><div style="font-size:0.85rem;color:var(--text-muted)">${w.meaning}</div></div><button class="btn btn-outline btn-sm" onclick="window.speechSynthesis.speak(new SpeechSynthesisUtterance('${w.hanzi}'))">🔊</button></div>`).join('')}</div>`);
+          openModal(`<h3 class="card-title">📖 Từ vựng Bài ${i + 1} (${lw.length} từ)</h3><div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">${lw.map((w) => `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border:1px solid var(--border);border-radius:10px"><div><strong class="hanzi-md">${w.hanzi}</strong> <span style="color:var(--primary)">${w.pinyin}</span><div style="font-size:0.85rem;color:var(--text-muted)">${w.meaning}</div></div><button class="btn btn-outline btn-sm" onclick="window.speechSynthesis.speak(new SpeechSynthesisUtterance('${w.hanzi}'))">🔊</button></div>`).join('')}</div>`);
         };
       });
     };
@@ -560,14 +769,19 @@ function renderView(tab) {
   } else if (tab === 'practice') {
     let filterLevel = 0, statusTab = 'all', page = 1;
     const pageSize = 30;
+    const totalCount = allWords.length;
+    const masteredCount = allWords.filter((w) => (store.state.srs[w.hanzi]?.streak || 0) >= 3).length;
+    const learningCount = allWords.filter((w) => store.state.srs[w.hanzi] && (store.state.srs[w.hanzi].streak || 0) < 3).length;
+    const unlearnedCount = Math.max(0, totalCount - masteredCount - learningCount);
+
     main.innerHTML = `
       <div class="card">
-        <div class="card-header"><h2 class="card-title">📜 Sổ Từ Vựng (${allWords.length.toLocaleString()} từ)</h2></div>
+        <div class="card-header"><h2 class="card-title">📜 Sổ Từ Vựng (${totalCount.toLocaleString()} từ)</h2></div>
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">
-          <button class="btn btn-primary btn-sm" data-st-tab="all">📚 Tất cả</button>
-          <button class="btn btn-outline btn-sm" data-st-tab="unlearned">🆕 Chưa học</button>
-          <button class="btn btn-outline btn-sm" data-st-tab="learning">🔁 Đang ôn</button>
-          <button class="btn btn-outline btn-sm" data-st-tab="mastered">✅ Đã thuộc</button>
+          <button class="btn btn-primary btn-sm" data-st-tab="all">📚 Tất cả (${totalCount.toLocaleString()})</button>
+          <button class="btn btn-outline btn-sm" data-st-tab="unlearned">🆕 Chưa học (${unlearnedCount.toLocaleString()})</button>
+          <button class="btn btn-outline btn-sm" data-st-tab="learning">🔁 Đang ôn (${learningCount.toLocaleString()})</button>
+          <button class="btn btn-outline btn-sm" data-st-tab="mastered">✅ Đã thuộc (${masteredCount.toLocaleString()})</button>
         </div>
         <div style="display:flex;gap:10px;margin-bottom:14px">
           <input type="search" id="vocab-search" placeholder="Tìm chữ Hán, pinyin hoặc nghĩa..." />
@@ -590,7 +804,7 @@ function renderView(tab) {
       const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
       if (page > totalPages) page = 1;
       const slice = filtered.slice((page - 1) * pageSize, page * pageSize);
-      document.getElementById('vocab-summary').innerHTML = `Tìm thấy <strong>${filtered.length.toLocaleString()}</strong> từ · Trang <strong>${page}/${totalPages}</strong>`;
+      document.getElementById('vocab-summary').innerHTML = `Tìm thấy <strong>${filtered.length.toLocaleString()} từ</strong> · Trang <strong>${page}/${totalPages}</strong>`;
       document.getElementById('vocab-list').innerHTML = slice.map((w) => `
         <div class="deck-card" data-detail-word="${w.hanzi}">
           <div>
@@ -603,10 +817,18 @@ function renderView(tab) {
       document.getElementById('vocab-pagination').innerHTML = `<button class="btn btn-outline btn-sm" id="btn-v-prev" ${page <= 1 ? 'disabled' : ''}>⬅️ Trước</button><span>Trang ${page}/${totalPages}</span><button class="btn btn-outline btn-sm" id="btn-v-next" ${page >= totalPages ? 'disabled' : ''}>Sau ➡️</button>`;
       document.getElementById('btn-v-prev').onclick = () => { page--; renderVocab(); };
       document.getElementById('btn-v-next').onclick = () => { page++; renderVocab(); };
-      document.querySelectorAll('[data-say]').forEach((b) => { b.onclick = (e) => { e.stopPropagation(); speakZh(b.dataset.say); }; });
+      document.querySelectorAll('[data-say]').forEach((b) => {
+        b.onclick = (e) => { e.stopPropagation(); speakZh(b.dataset.say); };
+      });
     };
     document.querySelectorAll('[data-st-tab]').forEach((b) => {
-      b.onclick = () => { statusTab = b.dataset.stTab; page = 1; document.querySelectorAll('[data-st-tab]').forEach((x) => { x.className = 'btn btn-outline btn-sm'; }); b.className = 'btn btn-primary btn-sm'; renderVocab(); };
+      b.onclick = () => {
+        statusTab = b.dataset.stTab;
+        page = 1;
+        document.querySelectorAll('[data-st-tab]').forEach((x) => { x.className = 'btn btn-outline btn-sm'; });
+        b.className = 'btn btn-primary btn-sm';
+        renderVocab();
+      };
     });
     document.getElementById('vocab-search').oninput = () => { page = 1; renderVocab(); };
     document.getElementById('vocab-level-filter').onchange = (e) => { filterLevel = Number(e.target.value); page = 1; renderVocab(); };
@@ -619,12 +841,19 @@ function renderView(tab) {
         <div class="card-header"><h2 class="card-title">📋 Phòng Thi Thử Panda HSK (HSK 1 – HSK 9)</h2></div>
         ${draft ? `<div style="padding:12px;border-radius:12px;background:var(--surface-alt);border:1.5px solid var(--primary);display:flex;justify-content:space-between;align-items:center;margin:12px 0"><div><strong>📝 Bài thi đang làm dở:</strong> HSK ${draft.level} (<code>${draft.examId}</code>)</div><button class="btn btn-primary btn-sm" id="btn-resume-draft">▶️ Tiếp tục</button></div>` : ''}
         <div class="deck-grid" style="margin-top:12px">
-          ${LEVELS.map((l) => { const c = EXAM_CONFIGS[l]; return `<div class="deck-card" data-start-exam="${l}"><div><div style="display:flex;justify-content:space-between"><strong style="color:var(--primary)">${c.label}</strong><span class="badge-pill">${c.totalQ} câu · ${c.minutes}p</span></div><p style="font-size:0.8rem;color:var(--text-muted);margin:6px 0 0">${c.desc}</p></div><button class="btn btn-primary btn-sm btn-block">📝 Vào phòng thi</button></div>`; }).join('')}
+          ${LEVELS.map((l) => {
+            const c = EXAM_CONFIGS[l];
+            return `<div class="deck-card" data-start-exam="${l}"><div><div style="display:flex;justify-content:space-between"><strong style="color:var(--primary)">${c.label}</strong><span class="badge-pill">${c.totalQ} câu · ${c.minutes}p</span></div><p style="font-size:0.8rem;color:var(--text-muted);margin:6px 0 0">${c.desc}</p></div><button class="btn btn-primary btn-sm btn-block">📝 Vào phòng thi</button></div>`;
+          }).join('')}
         </div>
       </div>
       ${history.length ? `<div class="card"><h3 class="card-title">🏅 Lịch Sử Thi (${p.name})</h3><div class="rank-list">${history.slice(0, 10).map((h) => `<div class="rank-row"><span><strong>HSK ${h.level}</strong> · <code>${h.examId}</code> (${h.date})</span><span style="font-weight:800;color:${h.passed ? 'var(--green)' : 'var(--primary)'}">${h.score}/${h.maxScore} · ${h.passed ? 'ĐẠT' : 'CHƯA ĐẠT'}</span></div>`).join('')}</div></div>` : ''}`;
-    if (document.getElementById('btn-resume-draft')) document.getElementById('btn-resume-draft').onclick = () => launchExamUI(main, draft.level, allWords, () => renderView('exam'), draft);
-    document.querySelectorAll('[data-start-exam]').forEach((card) => { card.onclick = () => launchExamUI(main, Number(card.dataset.startExam), allWords, () => renderView('exam')); });
+    if (document.getElementById('btn-resume-draft')) {
+      document.getElementById('btn-resume-draft').onclick = () => launchExamUI(main, draft.level, allWords, () => renderView('exam'), draft);
+    }
+    document.querySelectorAll('[data-start-exam]').forEach((card) => {
+      card.onclick = () => launchExamUI(main, Number(card.dataset.startExam), allWords, () => renderView('exam'));
+    });
   } else if (tab === 'speak') renderSpeakModule(main, allWords);
   else if (tab === 'video') renderVideoModule(main, (lvl, title) => startQuickQuiz(allWords.filter((w) => w.level === lvl).sort(() => Math.random() - 0.5).slice(0, 10), `Củng cố: ${title}`, 'video'), openModal, closeModal);
   else if (tab === 'placement') renderPlacementModule(main, allWords, (recLvl) => { p.activeWorld = recLvl; store.save(); updateTopbar(); switchTab('journey'); });
@@ -636,47 +865,68 @@ function renderView(tab) {
 }
 
 function switchTab(tab) {
-  const exec = () => {
-    currentTab = tab;
-    document.querySelectorAll('.side-item').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
-    document.getElementById('sidebar').classList.remove('open');
-    renderView(tab);
-  };
-  if (PUBLIC_TABS.has(tab)) exec(); else requireAuth(exec);
+  currentTab = tab;
+  document.querySelectorAll('.side-item').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+  document.getElementById('sidebar').classList.remove('open');
+  renderView(tab);
 }
 
 async function boot() {
   store.onSyncStatus(renderSyncBadge);
   updateTopbar();
   document.querySelectorAll('.side-item').forEach((b) => { b.onclick = () => switchTab(b.dataset.tab); });
-  document.querySelectorAll('[data-pub-link]').forEach((a) => { a.onclick = (e) => { e.preventDefault(); switchTab(a.dataset.pubLink); }; });
+  document.querySelectorAll('[data-pub-link]').forEach((a) => {
+    a.onclick = (e) => { e.preventDefault(); switchTab(a.dataset.pubLink); };
+  });
   document.getElementById('btn-home').onclick = () => switchTab('home');
   document.getElementById('btn-ai-tutor').onclick = openAITutorModal;
   document.getElementById('btn-auth-sidebar').onclick = () => openAuthModal('login');
   document.getElementById('ui-user-badge').onclick = () => openAuthModal('login');
+  document.getElementById('ui-sync-status').onclick = () => openAuthModal('login');
   document.getElementById('modal-close').onclick = closeModal;
+  document.getElementById('modal-backdrop').onclick = (e) => {
+    if (e.target.id === 'modal-backdrop') closeModal();
+  };
   document.getElementById('btn-toggle-sidebar').onclick = () => document.getElementById('sidebar').classList.toggle('collapsed');
   document.getElementById('btn-mobile-menu').onclick = () => document.getElementById('sidebar').classList.toggle('open');
-  document.getElementById('btn-theme-top').onclick = () => { store.state.settings.theme = store.state.settings.theme === 'light' ? 'dark' : 'light'; store.save(); updateTopbar(); };
+  document.getElementById('btn-theme-top').onclick = () => {
+    store.state.settings.theme = store.state.settings.theme === 'light' ? 'dark' : 'light';
+    store.save();
+    updateTopbar();
+  };
 
   const searchInp = document.getElementById('global-dict-search');
   const drop = document.getElementById('global-search-dropdown');
   searchInp.oninput = () => {
     const q = searchInp.value.trim().toLowerCase();
-    if (!q) { drop.classList.add('hidden'); return; }
+    if (!q) {
+      drop.classList.add('hidden');
+      return;
+    }
     const hits = ALL_WORDS.filter((w) => w.hanzi.includes(q) || w.pinyin.toLowerCase().includes(q) || w.meaning.toLowerCase().includes(q)).slice(0, 8);
     drop.classList.remove('hidden');
-    drop.innerHTML = hits.length ? hits.map((w) => `<div style="padding:8px 10px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><div><strong>${w.hanzi}</strong> <span style="color:var(--primary)">${w.pinyin}</span> · ${w.meaning}</div><button class="btn btn-outline btn-sm" onclick="window.speechSynthesis.speak(new SpeechSynthesisUtterance('${w.hanzi}'))">🔊</button></div>`).join('') : `<div style="padding:10px;font-size:0.85rem;color:var(--text-muted)">Không tìm thấy "${q}"</div>`;
+    drop.innerHTML = hits.length
+      ? hits.map((w) => `<div style="padding:8px 10px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><div><strong>${w.hanzi}</strong> <span style="color:var(--primary)">${w.pinyin}</span> · ${w.meaning}</div><button class="btn btn-outline btn-sm" onclick="window.speechSynthesis.speak(new SpeechSynthesisUtterance('${w.hanzi}'))">🔊</button></div>`).join('')
+      : `<div style="padding:10px;font-size:0.85rem;color:var(--text-muted)">Không tìm thấy "${q}"</div>`;
   };
-  document.addEventListener('click', (e) => { if (!e.target.closest('.dict-search-wrap')) drop.classList.add('hidden'); });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.dict-search-wrap')) drop.classList.add('hidden');
+  });
 
   const sb = await getSupabase();
   if (sb) {
     const { data } = await sb.auth.getSession();
-    if (data?.session?.user) { await store.bindUser(data.session.user); updateTopbar(); }
+    if (data?.session?.user) {
+      await store.bindUser(data.session.user);
+      updateTopbar();
+    }
     sb.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_OUT') { await store.bindUser(null); updateTopbar(); }
-      else if (event === 'TOKEN_REFRESHED' && session?.user) { store.user = session.user; }
+      if (event === 'SIGNED_OUT') {
+        await store.bindUser(null);
+        updateTopbar();
+      } else if (event === 'TOKEN_REFRESHED' && session?.user) {
+        store.user = session.user;
+      }
     });
   }
 
@@ -684,7 +934,7 @@ async function boot() {
   await dataLoader.init();
   ALL_WORDS = await dataLoader.getAllLoadedWords();
   renderView('home');
-  if (store.user) await checkLegacyMigrationPrompt();
+  if (store.user) await checkGuestAndLegacyMigrationPrompt();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
 

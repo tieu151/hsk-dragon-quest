@@ -1,22 +1,76 @@
 import { getSupabase, extractUsernameFromUser } from '../services/supabase-client.js';
 
 const CACHE_PREFIX = 'panda_hsk_cloud_cache_v1_';
+const GUEST_STORAGE_KEY = 'panda_hsk_guest_state_v1';
 const LEGACY_ACCOUNTS_KEY = 'panda_hsk_accounts_v1';
 const MIGRATION_DONE_KEY = 'panda_hsk_migrated_flag_v1';
 
 function createDefaultState(name = 'Khách', avatar = '🐼') {
   return {
-    profile: { name, avatar, xp: 0, coins: 0, streak: 0, longestStreak: 0, activeWorld: 1, lastStudyDate: null, hideOnLeaderboard: false, dailyGoalMinutes: 15 },
-    srs: {}, customDecks: [], examHistory: [], inProgressExam: null, badges: [], dailyStats: [], settings: { theme: 'light' }, errorReports: []
+    version: 2,
+    profile: {
+      name,
+      avatar,
+      xp: 0,
+      coins: 0,
+      streak: 0,
+      longestStreak: 0,
+      activeWorld: 1,
+      lastStudyDate: null,
+      hideOnLeaderboard: false,
+      dailyGoalMinutes: 15
+    },
+    srs: {},
+    customDecks: [],
+    examHistory: [],
+    inProgressExam: null,
+    badges: [],
+    dailyStats: [],
+    settings: { theme: 'light' },
+    errorReports: []
   };
+}
+
+function safeReadLocal(key) {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function safeWriteLocal(key, value) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {}
+}
+
+function safeRemoveLocal(key) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(key);
+  } catch {}
+}
+
+function hasMeaningfulProgress(st) {
+  if (!st || typeof st !== 'object') return false;
+  const wordCount = Object.keys(st.srs || {}).length;
+  const xp = Number(st.profile?.xp || 0);
+  const coins = Number(st.profile?.coins || 0);
+  const decks = Array.isArray(st.customDecks) ? st.customDecks.length : 0;
+  const exams = Array.isArray(st.examHistory) ? st.examHistory.length : 0;
+  return wordCount > 0 || xp > 0 || coins > 0 || decks > 0 || exams > 0;
 }
 
 class CloudStore {
   constructor() {
     this.user = null;
     this.currentUsername = null;
-    this.state = createDefaultState();
-    this.syncStatus = 'idle';
+    this.state = this.loadGuestState();
+    this.syncStatus = 'guest';
     this.syncListeners = new Set();
     this.dirtyWords = new Set();
     this.lastSyncedSnapshot = { xp: 0, coins: 0, examCount: 0, reportCount: 0 };
@@ -25,13 +79,37 @@ class CloudStore {
 
     if (typeof window !== 'undefined') {
       window.addEventListener('online', () => {
+        if (!this.user) {
+          this.setSyncStatus('guest');
+          return;
+        }
         if (this.pendingSync || this.dirtyWords.size > 0) this.flushToCloud();
-        else if (this.user) this.setSyncStatus('saved');
+        else this.setSyncStatus('saved');
       });
       window.addEventListener('offline', () => {
-        if (this.user) this.setSyncStatus('offline');
+        this.setSyncStatus(this.user ? 'offline' : 'guest');
       });
     }
+  }
+
+  loadGuestState() {
+    const saved = safeReadLocal(GUEST_STORAGE_KEY);
+    if (!saved || typeof saved !== 'object') return createDefaultState('Khách', '🐼');
+    const base = createDefaultState('Khách', '🐼');
+    return {
+      ...base,
+      ...saved,
+      profile: { ...base.profile, ...(saved.profile || {}), name: 'Khách' },
+      settings: { ...base.settings, ...(saved.settings || {}) }
+    };
+  }
+
+  saveGuestState() {
+    safeWriteLocal(GUEST_STORAGE_KEY, this.state);
+  }
+
+  clearGuestState() {
+    safeRemoveLocal(GUEST_STORAGE_KEY);
   }
 
   onSyncStatus(fn) {
@@ -42,42 +120,62 @@ class CloudStore {
 
   setSyncStatus(status) {
     this.syncStatus = status;
-    this.syncListeners.forEach((fn) => { try { fn(status); } catch {} });
+    this.syncListeners.forEach((fn) => {
+      try { fn(status); } catch {}
+    });
   }
 
-  getCacheKey(uid) { return `${CACHE_PREFIX}${uid}`; }
+  getCacheKey(uid) {
+    return `${CACHE_PREFIX}${uid}`;
+  }
+
   saveLocalCache() {
-    if (!this.user) return;
-    try { localStorage.setItem(this.getCacheKey(this.user.id), JSON.stringify(this.state)); } catch {}
+    if (!this.user) {
+      this.saveGuestState();
+      return;
+    }
+    safeWriteLocal(this.getCacheKey(this.user.id), this.state);
   }
+
   loadLocalCache(uid) {
-    try { const r = localStorage.getItem(this.getCacheKey(uid)); return r ? JSON.parse(r) : null; } catch { return null; }
+    return safeReadLocal(this.getCacheKey(uid));
   }
+
   clearUserLocalCache(uid) {
-    try { if (uid) localStorage.removeItem(this.getCacheKey(uid)); } catch {}
+    if (uid) safeRemoveLocal(this.getCacheKey(uid));
   }
 
   async bindUser(user) {
     this.user = user;
     if (!user) {
       this.currentUsername = null;
-      this.state = createDefaultState();
-      this.setSyncStatus('idle');
+      this.dirtyWords.clear();
+      this.pendingSync = false;
+      this.state = this.loadGuestState();
+      this.setSyncStatus('guest');
       return;
     }
     this.currentUsername = extractUsernameFromUser(user);
     const metaName = user.user_metadata?.display_name || this.currentUsername;
     const metaAvatar = user.user_metadata?.avatar_url || '🐼';
     const cached = this.loadLocalCache(user.id);
-    this.state = cached ? { ...createDefaultState(metaName, metaAvatar), ...cached } : createDefaultState(metaName, metaAvatar);
+    this.state = cached
+      ? { ...createDefaultState(metaName, metaAvatar), ...cached }
+      : createDefaultState(metaName, metaAvatar);
     await this.loadFromCloud();
   }
 
   async loadFromCloud() {
     if (!this.user) return;
     const sb = await getSupabase();
-    if (!sb) return;
-    if (!navigator.onLine) { this.setSyncStatus('offline'); return; }
+    if (!sb) {
+      this.setSyncStatus('offline');
+      return;
+    }
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      this.setSyncStatus('offline');
+      return;
+    }
 
     this.setSyncStatus('syncing');
     const uid = this.user.id;
@@ -129,15 +227,21 @@ class CloudStore {
 
       if (Array.isArray(decksRes.data)) {
         this.state.customDecks = decksRes.data.map((d) => ({
-          id: d.client_deck_id || d.id, dbId: d.id, title: d.title, words: Array.isArray(d.words) ? d.words : []
+          id: d.client_deck_id || d.id,
+          dbId: d.id,
+          title: d.title,
+          words: Array.isArray(d.words) ? d.words : []
         }));
       }
       if (Array.isArray(examsRes.data)) {
         const submitted = examsRes.data.filter((e) => e.status === 'submitted');
         const draft = examsRes.data.find((e) => e.status === 'in_progress' && e.draft_state);
         this.state.examHistory = submitted.map((e) => ({
-          level: e.hsk_level, examId: e.exam_code, score: Number(e.total_score || 0),
-          maxScore: Number(e.max_score || 100), passed: Boolean(e.passed),
+          level: e.hsk_level,
+          examId: e.exam_code,
+          score: Number(e.total_score || 0),
+          maxScore: Number(e.max_score || 100),
+          passed: Boolean(e.passed),
           date: e.submitted_at ? new Date(e.submitted_at).toLocaleDateString('vi-VN') : ''
         }));
         if (draft?.draft_state) this.state.inProgressExam = draft.draft_state;
@@ -146,8 +250,10 @@ class CloudStore {
       if (Array.isArray(statsRes.data)) this.state.dailyStats = statsRes.data;
 
       this.lastSyncedSnapshot = {
-        xp: this.state.profile.xp, coins: this.state.profile.coins,
-        examCount: this.state.examHistory.length, reportCount: (this.state.errorReports || []).length
+        xp: this.state.profile.xp,
+        coins: this.state.profile.coins,
+        examCount: this.state.examHistory.length,
+        reportCount: (this.state.errorReports || []).length
       };
       this.saveLocalCache();
       this.setSyncStatus('saved');
@@ -158,11 +264,18 @@ class CloudStore {
   }
 
   save() {
-    if (!this.user) return;
+    if (!this.user) {
+      this.saveGuestState();
+      this.setSyncStatus('guest');
+      return;
+    }
     Object.keys(this.state.srs || {}).forEach((hz) => this.dirtyWords.add(hz));
     this.saveLocalCache();
     this.pendingSync = true;
-    if (!navigator.onLine) { this.setSyncStatus('offline'); return; }
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      this.setSyncStatus('offline');
+      return;
+    }
     this.setSyncStatus('syncing');
     clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(() => this.flushToCloud(), 1000);
@@ -171,8 +284,14 @@ class CloudStore {
   async flushToCloud() {
     if (!this.user) return;
     const sb = await getSupabase();
-    if (!sb) return;
-    if (!navigator.onLine) { this.setSyncStatus('offline'); return; }
+    if (!sb) {
+      this.setSyncStatus('offline');
+      return;
+    }
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      this.setSyncStatus('offline');
+      return;
+    }
 
     const uid = this.user.id;
     this.setSyncStatus('syncing');
@@ -189,8 +308,11 @@ class CloudStore {
       const coinsDelta = Math.max(0, (this.state.profile.coins || 0) - (this.lastSyncedSnapshot.coins || 0));
       if (xpDelta > 0 || coinsDelta > 0) {
         const { data: progRow } = await sb.rpc('rpc_record_study_reward', {
-          p_xp_delta: Math.min(xpDelta, 500), p_coins_delta: Math.min(coinsDelta, 200),
-          p_study_minutes: 1, p_words_learned: 0, p_words_reviewed: this.dirtyWords.size
+          p_xp_delta: Math.min(xpDelta, 500),
+          p_coins_delta: Math.min(coinsDelta, 200),
+          p_study_minutes: 1,
+          p_words_learned: 0,
+          p_words_reviewed: this.dirtyWords.size
         });
         if (progRow) {
           this.state.profile.xp = Number(progRow.xp || this.state.profile.xp);
@@ -206,9 +328,14 @@ class CloudStore {
           const rec = this.state.srs[hz] || { streak: 0, reviews: 1 };
           const streak = Number(rec.streak || 0);
           return {
-            user_id: uid, word_id: hz, status: streak >= 3 ? 'mastered' : 'learning',
-            correct_count: streak, wrong_count: Math.max(0, Number(rec.reviews || 1) - streak),
-            srs_streak: streak, srs_interval_days: streak >= 3 ? 7 : 1, last_reviewed_at: new Date().toISOString()
+            user_id: uid,
+            word_id: hz,
+            status: streak >= 3 ? 'mastered' : 'learning',
+            correct_count: streak,
+            wrong_count: Math.max(0, Number(rec.reviews || 1) - streak),
+            srs_streak: streak,
+            srs_interval_days: streak >= 3 ? 7 : 1,
+            last_reviewed_at: new Date().toISOString()
           };
         });
         const { error: vocabErr } = await sb.from('vocab_progress').upsert(batch, { onConflict: 'user_id,word_id' });
@@ -217,7 +344,10 @@ class CloudStore {
 
       if (Array.isArray(this.state.customDecks) && this.state.customDecks.length > 0) {
         const deckRows = this.state.customDecks.map((d) => ({
-          user_id: uid, client_deck_id: String(d.id), title: String(d.title || 'Bộ thẻ').slice(0, 120), words: d.words || []
+          user_id: uid,
+          client_deck_id: String(d.id),
+          title: String(d.title || 'Bộ thẻ').slice(0, 120),
+          words: d.words || []
         }));
         await sb.from('custom_decks').upsert(deckRows, { onConflict: 'user_id,client_deck_id' });
       }
@@ -227,10 +357,15 @@ class CloudStore {
         const latest = exams[0];
         if (latest?.examId) {
           await sb.rpc('rpc_submit_exam_attempt', {
-            p_hsk_level: Number(latest.level || 1), p_exam_code: String(latest.examId), p_exam_type: 'mock',
-            p_skill_scores: latest.skillScores || {}, p_total_score: Number(latest.score || 0),
-            p_max_score: Number(latest.maxScore || 100), p_passed: Boolean(latest.passed),
-            p_duration_seconds: Number(latest.durationSeconds || 600), p_answers: latest.answers || {}
+            p_hsk_level: Number(latest.level || 1),
+            p_exam_code: String(latest.examId),
+            p_exam_type: 'mock',
+            p_skill_scores: latest.skillScores || {},
+            p_total_score: Number(latest.score || 0),
+            p_max_score: Number(latest.maxScore || 100),
+            p_passed: Boolean(latest.passed),
+            p_duration_seconds: Number(latest.durationSeconds || 600),
+            p_answers: latest.answers || {}
           });
         }
         this.lastSyncedSnapshot.examCount = exams.length;
@@ -239,8 +374,13 @@ class CloudStore {
       if (this.state.inProgressExam?.examId) {
         const draft = this.state.inProgressExam;
         await sb.from('exam_attempts').upsert({
-          user_id: uid, hsk_level: Number(draft.level || 1), exam_code: String(draft.examId),
-          exam_type: 'mock', max_score: 100, draft_state: draft, status: 'in_progress'
+          user_id: uid,
+          hsk_level: Number(draft.level || 1),
+          exam_code: String(draft.examId),
+          exam_type: 'mock',
+          max_score: 100,
+          draft_state: draft,
+          status: 'in_progress'
         }, { onConflict: 'user_id,exam_code' });
       }
 
@@ -249,7 +389,9 @@ class CloudStore {
         const newest = reports[0];
         if (newest) {
           await sb.from('content_reports').insert({
-            user_id: uid, target_ref: String(newest.target || 'Chung'), description: String(newest.desc || '')
+            user_id: uid,
+            target_ref: String(newest.target || 'Chung'),
+            description: String(newest.desc || '')
           });
         }
         this.lastSyncedSnapshot.reportCount = reports.length;
@@ -263,43 +405,91 @@ class CloudStore {
     }
   }
 
-  detectLegacyLocalData() {
+  detectPendingLocalProgress() {
+    const found = [];
+    const guest = safeReadLocal(GUEST_STORAGE_KEY);
+    if (hasMeaningfulProgress(guest)) {
+      found.push({
+        source: 'guest',
+        username: 'khach',
+        displayName: 'Tiến độ Chế độ Khách trên trình duyệt',
+        wordCount: Object.keys(guest.srs || {}).length,
+        xp: Number(guest.profile?.xp || 0),
+        state: guest
+      });
+    }
+
     try {
-      const doneFor = localStorage.getItem(MIGRATION_DONE_KEY);
-      if (this.user && doneFor === this.user.id) return null;
-      const rawAcc = localStorage.getItem(LEGACY_ACCOUNTS_KEY);
-      const accounts = rawAcc ? JSON.parse(rawAcc) : [];
-      const found = [];
-      if (Array.isArray(accounts)) {
-        accounts.forEach((acc) => {
-          const stRaw = localStorage.getItem(`panda_hsk_state_${acc.username}`);
-          if (stRaw) {
-            const st = JSON.parse(stRaw);
-            const wordCount = Object.keys(st.srs || {}).length;
-            const xp = st.profile?.xp || 0;
-            if (wordCount > 0 || xp > 0 || (st.customDecks || []).length > 0 || (st.examHistory || []).length > 0) {
-              found.push({ username: acc.username, displayName: acc.displayName || acc.username, wordCount, xp, state: st });
+      const doneFor = typeof window !== 'undefined' ? window.localStorage.getItem(MIGRATION_DONE_KEY) : null;
+      if (!this.user || doneFor !== this.user.id) {
+        const accounts = safeReadLocal(LEGACY_ACCOUNTS_KEY);
+        if (Array.isArray(accounts)) {
+          accounts.forEach((acc) => {
+            const st = safeReadLocal(`panda_hsk_state_${acc.username}`);
+            if (hasMeaningfulProgress(st)) {
+              found.push({
+                source: 'legacy',
+                username: acc.username,
+                displayName: acc.displayName || acc.username,
+                wordCount: Object.keys(st.srs || {}).length,
+                xp: Number(st.profile?.xp || 0),
+                state: st
+              });
             }
-          }
-        });
+          });
+        }
       }
-      return found.length ? found : null;
-    } catch { return null; }
+    } catch {}
+
+    return found.length ? found : null;
+  }
+
+  detectLegacyLocalData() {
+    return this.detectPendingLocalProgress();
+  }
+
+  async mergeLocalProgressIntoCloud(item) {
+    if (!this.user || !item?.state) return { ok: false };
+    const st = item.state;
+    const sb = await getSupabase();
+
+    // Gop vao state hien tai truoc (dam bao hoat dong ca khi RPC chua ton tai)
+    Object.entries(st.srs || {}).forEach(([hz, rec]) => {
+      const cur = this.state.srs[hz];
+      if (!cur || (rec.streak || 0) > (cur.streak || 0)) {
+        this.state.srs[hz] = rec;
+        this.dirtyWords.add(hz);
+      }
+    });
+    this.state.profile.xp += Number(st.profile?.xp || 0);
+    this.state.profile.coins += Number(st.profile?.coins || 0);
+    if (Array.isArray(st.customDecks) && st.customDecks.length > 0) {
+      const existingTitles = new Set((this.state.customDecks || []).map((d) => d.title));
+      st.customDecks.forEach((d) => {
+        if (!existingTitles.has(d.title)) this.state.customDecks.push(d);
+      });
+    }
+
+    if (sb && item.source === 'legacy') {
+      await sb.rpc('rpc_migrate_local_data', { p_payload: st }).catch(() => {});
+      safeWriteLocal(MIGRATION_DONE_KEY, this.user.id);
+    }
+    if (item.source === 'guest') {
+      this.clearGuestState();
+    }
+
+    this.saveLocalCache();
+    await this.flushToCloud();
+    return { ok: true };
   }
 
   async migrateLegacyState(legacyState) {
-    if (!this.user || !legacyState) return { ok: false };
-    const sb = await getSupabase();
-    if (!sb) return { ok: false };
-    const { data, error } = await sb.rpc('rpc_migrate_local_data', { p_payload: legacyState });
-    if (error) return { ok: false, error: error.message };
-    localStorage.setItem(MIGRATION_DONE_KEY, this.user.id);
-    await this.loadFromCloud();
-    return { ok: true, result: data };
+    return this.mergeLocalProgressIntoCloud({ source: 'legacy', state: legacyState });
   }
 
-  markLegacySkipped() {
-    if (this.user) localStorage.setItem(MIGRATION_DONE_KEY, this.user.id);
+  markLegacySkipped(clearGuest = false) {
+    if (this.user) safeWriteLocal(MIGRATION_DONE_KEY, this.user.id);
+    if (clearGuest) this.clearGuestState();
   }
 }
 
