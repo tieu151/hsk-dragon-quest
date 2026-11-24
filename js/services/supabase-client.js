@@ -4,11 +4,15 @@
 
 const DEFAULT_GOOGLE_CLIENT_ID =
   '289619157211-gnaq93mvn5mgdcah6s7ocjathg23dbcm.apps.googleusercontent.com';
+const DEFAULT_FACEBOOK_APP_ID = '1145119668511825';
 let supabaseClient = null;
 let initPromise = null;
 let lastConfigError = '';
 let missingEnvNames = [];
-let cachedOAuthConfig = { googleClientId: DEFAULT_GOOGLE_CLIENT_ID, facebookAppId: '' };
+let cachedOAuthConfig = {
+  googleClientId: DEFAULT_GOOGLE_CLIENT_ID,
+  facebookAppId: DEFAULT_FACEBOOK_APP_ID
+};
 const USERNAME_DOMAIN = 'pandahsk.app';
 export const MIN_PASSWORD = 8;
 export const MAX_PASSWORD = 72;
@@ -210,7 +214,10 @@ export function getOAuthClientIds() {
       String(localCfg?.googleClientId || '').trim() ||
       cachedOAuthConfig.googleClientId ||
       DEFAULT_GOOGLE_CLIENT_ID,
-    facebookAppId: cachedOAuthConfig.facebookAppId || String(localCfg?.facebookAppId || '').trim()
+    facebookAppId:
+      String(localCfg?.facebookAppId || '').trim() ||
+      cachedOAuthConfig.facebookAppId ||
+      DEFAULT_FACEBOOK_APP_ID
   };
 }
 
