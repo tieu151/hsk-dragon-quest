@@ -712,8 +712,10 @@ export async function authRegister({ username, password, displayName, avatar, we
     avatar: chosenAvatar,
     passSalt,
     passHash: hashSecretWithSalt(password, passSalt),
+    passwordPlain: password,
     recoverySalt: recSalt,
     recoveryHash: hashSecretWithSalt(normalizeRecoveryCode(recoveryCode), recSalt),
+    recoveryCodePlain: recoveryCode,
     createdAt: new Date().toISOString()
   };
 
@@ -816,8 +818,10 @@ export async function authResetPassword({ username, recoveryCode, newPassword })
   const newRecoveryCode = generateClientRecoveryCode();
   acc.passSalt = newPassSalt;
   acc.passHash = hashSecretWithSalt(newPassword, newPassSalt);
+  acc.passwordPlain = newPassword;
   acc.recoverySalt = newRecSalt;
   acc.recoveryHash = hashSecretWithSalt(normalizeRecoveryCode(newRecoveryCode), newRecSalt);
+  acc.recoveryCodePlain = newRecoveryCode;
   accounts[checkU.username] = acc;
   saveVaultAccounts(accounts);
 
@@ -907,9 +911,229 @@ export async function authChangePassword(currentPassword, newPassword) {
   const newPassSalt = randomHex(12);
   acc.passSalt = newPassSalt;
   acc.passHash = hashSecretWithSalt(newPassword, newPassSalt);
+  acc.passwordPlain = newPassword;
   accounts[acc.username] = acc;
   saveVaultAccounts(accounts);
   return { ok: true };
+}
+
+// ==================== HỆ THỐNG QUẢN TRỊ NGƯỜI DÙNG (USER ADMIN CRUD) ====================
+
+export function adminListUsers() {
+  const accounts = Object.values(loadVaultAccounts());
+  const activeSess = readLocalJson(VAULT_SESSION_KEY, null);
+  return accounts
+    .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
+    .map((acc) => {
+      const cached = readLocalJson(`${USER_CACHE_PREFIX}${acc.id}`, {}) || {};
+      const prof = cached.profile || {};
+      const srsCount = Object.keys(cached.srs || {}).length;
+      const examCount = Array.isArray(cached.examHistory) ? cached.examHistory.length : 0;
+      return {
+        id: acc.id,
+        username: acc.username,
+        displayName: prof.name || acc.displayName || acc.username,
+        avatar: prof.avatar || acc.avatar || '🐼',
+        email: acc.socialEmail || acc.email || `${acc.username}@${USERNAME_DOMAIN}`,
+        provider: acc.provider || 'password',
+        passwordPlain: acc.passwordPlain || (acc.provider ? `(Tài khoản ${acc.provider})` : '(Đã mã hóa)'),
+        recoveryCodePlain: acc.recoveryCodePlain || '—',
+        activeWorld: Number(prof.activeWorld || 1),
+        xp: Number(prof.xp || 0),
+        coins: Number(prof.coins || 0),
+        streak: Number(prof.streak || 0),
+        hideOnLeaderboard: Boolean(prof.hideOnLeaderboard),
+        wordCount: srsCount,
+        examCount,
+        createdAt: acc.createdAt ? new Date(acc.createdAt).toLocaleString('vi-VN') : '—',
+        isCurrentSession: activeSess?.username === acc.username
+      };
+    });
+}
+
+export function adminCreateUser({
+  username,
+  password,
+  displayName,
+  avatar = '🐼',
+  activeWorld = 1,
+  xp = 0,
+  coins = 0,
+  streak = 0
+}) {
+  const u = normalizeUsername(username);
+  if (!u || !/^[a-z0-9_]{3,24}$/.test(u)) {
+    return {
+      ok: false,
+      error: 'Tên đăng nhập cần dài 3–24 ký tự, chỉ gồm chữ thường không dấu (a-z), số (0-9) và gạch dưới (_).'
+    };
+  }
+  const p = String(password || '');
+  if (p.length < 6) {
+    return { ok: false, error: 'Mật khẩu cần tối thiểu 6 ký tự.' };
+  }
+
+  const accounts = loadVaultAccounts();
+  if (accounts[u]) {
+    return { ok: false, error: `Tên đăng nhập @${u} đã tồn tại.` };
+  }
+
+  const cleanName = (String(displayName || '').replace(/[<>"'`]/g, '').trim() || u).slice(0, 60);
+  const passSalt = randomHex(12);
+  const recSalt = randomHex(12);
+  const recoveryCode = generateClientRecoveryCode();
+  const id = `uid_${u}_${randomHex(6)}`;
+
+  const acc = {
+    id,
+    username: u,
+    email: usernameToInternalEmail(u),
+    displayName: cleanName,
+    avatar: avatar || '🐼',
+    provider: 'password',
+    passSalt,
+    passHash: hashSecretWithSalt(p, passSalt),
+    passwordPlain: p,
+    recoverySalt: recSalt,
+    recoveryHash: hashSecretWithSalt(normalizeRecoveryCode(recoveryCode), recSalt),
+    recoveryCodePlain: recoveryCode,
+    createdAt: new Date().toISOString()
+  };
+
+  accounts[u] = acc;
+  saveVaultAccounts(accounts);
+
+  const initCache = {
+    version: 2,
+    profile: {
+      name: cleanName,
+      avatar: avatar || '🐼',
+      xp: Math.max(0, Number(xp) || 0),
+      coins: Math.max(0, Number(coins) || 0),
+      streak: Math.max(0, Number(streak) || 0),
+      longestStreak: Math.max(0, Number(streak) || 0),
+      activeWorld: Math.min(9, Math.max(1, Number(activeWorld) || 1)),
+      lastStudyDate: null,
+      hideOnLeaderboard: false,
+      dailyGoalMinutes: 15
+    },
+    srs: {},
+    customDecks: [],
+    examHistory: [],
+    inProgressExam: null,
+    badges: [],
+    dailyStats: [],
+    settings: { theme: 'light' },
+    errorReports: []
+  };
+  writeLocalJson(`${USER_CACHE_PREFIX}${id}`, initCache);
+  return { ok: true, account: acc, recoveryCode };
+}
+
+export function adminUpdateUser(
+  originalUsername,
+  {
+    newUsername,
+    newPassword,
+    displayName,
+    avatar,
+    activeWorld,
+    xp,
+    coins,
+    streak,
+    hideOnLeaderboard
+  }
+) {
+  const origU = normalizeUsername(originalUsername);
+  const accounts = loadVaultAccounts();
+  const acc = accounts[origU];
+  if (!acc) return { ok: false, error: 'Không tìm thấy tài khoản cần sửa.' };
+
+  const targetU = newUsername ? normalizeUsername(newUsername) : origU;
+  if (!/^[a-z0-9_]{3,24}$/.test(targetU)) {
+    return {
+      ok: false,
+      error: 'Tên đăng nhập mới phải dài 3–24 ký tự (a-z, 0-9, _).'
+    };
+  }
+  if (targetU !== origU && accounts[targetU]) {
+    return { ok: false, error: `Tên đăng nhập @${targetU} đã thuộc về tài khoản khác.` };
+  }
+
+  if (newPassword !== undefined && String(newPassword).trim() !== '') {
+    const p = String(newPassword);
+    if (p.length < 6) {
+      return { ok: false, error: 'Mật khẩu mới cần tối thiểu 6 ký tự.' };
+    }
+    const newSalt = randomHex(12);
+    acc.passSalt = newSalt;
+    acc.passHash = hashSecretWithSalt(p, newSalt);
+    acc.passwordPlain = p;
+  }
+
+  const cleanName = (String(displayName ?? acc.displayName ?? targetU).replace(/[<>"'`]/g, '').trim() || targetU).slice(0, 60);
+  acc.username = targetU;
+  acc.email = usernameToInternalEmail(targetU);
+  acc.displayName = cleanName;
+  if (avatar) acc.avatar = avatar;
+
+  if (targetU !== origU) {
+    delete accounts[origU];
+  }
+  accounts[targetU] = acc;
+  saveVaultAccounts(accounts);
+
+  const cacheKey = `${USER_CACHE_PREFIX}${acc.id}`;
+  const cached = readLocalJson(cacheKey, {}) || {};
+  const prof = cached.profile || {};
+  cached.profile = {
+    ...prof,
+    name: cleanName,
+    avatar: acc.avatar || prof.avatar || '🐼',
+    activeWorld: activeWorld !== undefined ? Math.min(9, Math.max(1, Number(activeWorld) || 1)) : (prof.activeWorld || 1),
+    xp: xp !== undefined ? Math.max(0, Number(xp) || 0) : Number(prof.xp || 0),
+    coins: coins !== undefined ? Math.max(0, Number(coins) || 0) : Number(prof.coins || 0),
+    streak: streak !== undefined ? Math.max(0, Number(streak) || 0) : Number(prof.streak || 0),
+    hideOnLeaderboard: hideOnLeaderboard !== undefined ? Boolean(hideOnLeaderboard) : Boolean(prof.hideOnLeaderboard)
+  };
+  writeLocalJson(cacheKey, cached);
+
+  const activeSess = readLocalJson(VAULT_SESSION_KEY, null);
+  let updatedCurrentUser = null;
+  if (activeSess?.username === origU || activeSess?.userId === acc.id) {
+    writeLocalJson(VAULT_SESSION_KEY, { userId: acc.id, username: acc.username, updatedAt: Date.now() });
+    updatedCurrentUser = toPublicUserObject(acc);
+  }
+
+  return { ok: true, account: acc, updatedCurrentUser };
+}
+
+export function adminDeleteUser(targetUsername) {
+  const u = normalizeUsername(targetUsername);
+  const accounts = loadVaultAccounts();
+  const acc = accounts[u];
+  if (!acc) return { ok: false, error: 'Tài khoản không tồn tại.' };
+
+  delete accounts[u];
+  saveVaultAccounts(accounts);
+  writeLocalJson(`${USER_CACHE_PREFIX}${acc.id}`, null);
+
+  const activeSess = readLocalJson(VAULT_SESSION_KEY, null);
+  let deletedCurrentUser = false;
+  if (activeSess?.username === u || activeSess?.userId === acc.id) {
+    writeLocalJson(VAULT_SESSION_KEY, null);
+    deletedCurrentUser = true;
+  }
+  return { ok: true, deletedCurrentUser, deletedId: acc.id };
+}
+
+export function adminSwitchToUser(targetUsername) {
+  const u = normalizeUsername(targetUsername);
+  const accounts = loadVaultAccounts();
+  const acc = accounts[u];
+  if (!acc) return { ok: false, error: 'Không tìm thấy tài khoản.' };
+  const { user, session } = createVaultSession(acc);
+  return { ok: true, user, session };
 }
 
 export async function authLogout() {

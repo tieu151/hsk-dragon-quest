@@ -26,7 +26,12 @@ import {
   MAX_PASSWORD,
   fetchLeaderboard,
   exportUserCloudData,
-  deleteAccountOnServer
+  deleteAccountOnServer,
+  adminListUsers,
+  adminCreateUser,
+  adminUpdateUser,
+  adminDeleteUser,
+  adminSwitchToUser
 } from './services/supabase-client.js';
 import {
   renderSpeakModule,
@@ -360,6 +365,7 @@ function openProfileAccountModal() {
       <div id="prof-rc-msg" style="font-size:0.8rem;color:#dc2626"></div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      <button class="btn btn-primary btn-sm" style="flex:1" id="btn-open-admin-users">🛡️ Quản trị tất cả tài khoản</button>
       <button class="btn btn-green btn-sm" style="flex:1" id="btn-export-data">📥 Xuất dữ liệu (JSON)</button>
       <button class="btn btn-outline btn-sm" style="flex:1;color:#dc2626;border-color:#fecaca" id="btn-toggle-del">🗑️ Xóa vĩnh viễn tài khoản</button>
     </div>
@@ -435,6 +441,10 @@ function openProfileAccountModal() {
       intro: 'Mã khôi phục cũ (nếu có) đã mất hiệu lực.',
       onDone: openProfileAccountModal
     });
+  };
+  document.getElementById('btn-open-admin-users').onclick = () => {
+    closeModal();
+    switchTab('admin-users');
   };
   document.getElementById('btn-export-data').onclick = async () => {
     const res = await exportUserCloudData();
@@ -842,39 +852,435 @@ function openAuthModal(defaultMode = 'login') {
   renderAuth(defaultMode);
 }
 
+function findRelevantWordsForAI(query) {
+  const q = String(query || '').trim().toLowerCase();
+  if (!q || !ALL_WORDS.length) return [];
+
+  // Loại bỏ các cụm từ hỏi thông thường để lấy từ khóa cần tra
+  const cleaned = q
+    .replace(/(trong tiếng trung là gì|tiếng trung là gì|tiếng hán là gì|nghĩa là gì|là gì|cách dùng|từ|chữ|dịch|giải thích|[?？!！.,])/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!cleaned) return [];
+
+  const exactHanzi = ALL_WORDS.filter((w) => w.hanzi === cleaned || q.includes(w.hanzi));
+  if (exactHanzi.length > 0) return exactHanzi.slice(0, 5);
+
+  const exactMeaning = ALL_WORDS.filter((w) => {
+    const m = String(w.meaning || '').toLowerCase();
+    const parts = m.split(/[;；,，]/).map((s) => s.trim());
+    return parts.includes(cleaned) || w.pinyin.toLowerCase() === cleaned;
+  });
+  if (exactMeaning.length > 0) return exactMeaning.slice(0, 5);
+
+  if (cleaned.length >= 2) {
+    return ALL_WORDS.filter(
+      (w) =>
+        String(w.meaning || '').toLowerCase().includes(cleaned) ||
+        String(w.pinyin || '').toLowerCase().includes(cleaned)
+    ).slice(0, 5);
+  }
+  return [];
+}
+
+function formatAIReplyHtml(rawReply) {
+  return esc(rawReply)
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/`(.*?)`/g, '<code style="background:var(--surface-alt);padding:1px 5px;border-radius:4px">$1</code>')
+    .replace(/\n/g, '<br>');
+}
+
 function openAITutorModal() {
+  const quickPrompts = [
+    'Chào trong tiếng Trung là gì?',
+    'Cảm ơn và Xin lỗi nói thế nào?',
+    'Phân biệt 的, 地, 得',
+    'Phân biệt 不 và 没',
+    'Cách dùng câu chữ 把 và 被',
+    'Mẹo luyện thi HSK đạt điểm cao'
+  ];
+
   openModal(`
-    <h3 class="card-title">🐼 Sư Phụ AI Panda — Chuyên Gia Tiếng Trung</h3>
-    <div id="ai-chat-box" class="chat-stream"><div class="chat-msg ai"><strong>Sư phụ Panda:</strong> 你好！Bạn muốn hỏi gì về tiếng Trung hôm nay?</div></div>
-    <div style="display:flex;gap:8px;margin-top:8px">
-      <input class="panda-input" type="text" id="ai-input" placeholder="Nhập câu hỏi..." maxlength="600" />
-      <button class="btn btn-primary" id="ai-send">Gửi</button>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding-right:28px;margin-bottom:8px">
+      <h3 class="card-title" style="margin:0">🐼 Sư Phụ AI Panda — Chuyên Gia Tiếng Trung HSK 1–9</h3>
+      <button type="button" class="btn btn-outline btn-sm" id="ai-clear-chat" title="Làm mới cuộc trò chuyện">🗑️ Làm mới</button>
     </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+      ${quickPrompts.map((qp) => `<button type="button" class="btn btn-outline btn-sm" data-ai-quick="${esc(qp)}" style="font-size:0.75rem;padding:4px 8px">${esc(qp)}</button>`).join('')}
+    </div>
+    <div id="ai-chat-box" class="chat-stream" style="max-height:52dvh;overflow-y:auto">
+      <div class="chat-msg ai">
+        <strong>Sư phụ Panda:</strong> 你好 (Nǐ hǎo)! Bạn muốn hỏi từ vựng, cách chào hỏi, phân biệt ngữ pháp hay mẹo thi HSK 1–9 hôm nay? Hãy bấm gợi ý phía trên hoặc nhập câu hỏi bên dưới nhé!
+      </div>
+    </div>
+    <form id="ai-chat-form" style="display:flex;gap:8px;margin-top:10px">
+      <input class="panda-input" type="text" id="ai-input" placeholder="VD: chào trong tiếng Trung là gì? / phân biệt 的 地 得 / 坚持..." maxlength="600" autocomplete="off" />
+      <button type="submit" class="btn btn-primary" id="ai-send" style="flex-shrink:0">Gửi</button>
+    </form>
   `);
-  const send = async () => {
+
+  const askQuestion = async (rawText) => {
     const inp = document.getElementById('ai-input');
     const box = document.getElementById('ai-chat-box');
-    const msg = inp.value.trim();
+    const msg = String(rawText ?? inp.value).trim();
     if (!msg) return;
     inp.value = '';
-    box.innerHTML += `<div class="chat-msg user">${msg}</div>`;
+    box.innerHTML += `<div class="chat-msg user">${esc(msg)}</div>`;
     const lid = 'ai-l-' + Date.now();
-    box.innerHTML += `<div id="${lid}" class="chat-msg ai">⏳ Đang phân tích...</div>`;
+    box.innerHTML += `<div id="${lid}" class="chat-msg ai"><span class="panda-spinner" style="border-top-color:var(--primary)"></span> Sư phụ Panda đang phân tích...</div>`;
+    box.scrollTop = box.scrollHeight;
+
+    const wordMatches = findRelevantWordsForAI(msg).map((w) => ({
+      hanzi: w.hanzi,
+      pinyin: w.pinyin,
+      pos: w.pos,
+      level: w.level,
+      meaning: w.meaning
+    }));
+
     try {
       const res = await fetch('./api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Panda-User': store.currentUsername || 'guest' },
-        body: JSON.stringify({ message: msg })
+        body: JSON.stringify({ message: msg, wordMatches })
       });
       const data = await res.json();
-      document.getElementById(lid).innerHTML = (data.reply || data.error || '').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+      const replyText = data.reply || data.error || 'Hãy thử hỏi một từ vựng hoặc chủ đề ngữ pháp HSK cụ thể nhé!';
+      const targetEl = document.getElementById(lid);
+      if (targetEl) {
+        const zhTokens = Array.from(new Set((replyText.match(/[\u4e00-\u9fa5]{1,8}/g) || []).slice(0, 5)));
+        const speakBtns = zhTokens.length
+          ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">
+              ${zhTokens.map((zh) => `<button type="button" class="btn btn-outline btn-sm" data-ai-say="${esc(zh)}" style="font-size:0.75rem;padding:2px 8px">🔊 ${esc(zh)}</button>`).join('')}
+            </div>`
+          : '';
+        targetEl.innerHTML = `${formatAIReplyHtml(replyText)}${speakBtns}`;
+        targetEl.querySelectorAll('[data-ai-say]').forEach((b) => {
+          b.onclick = () => speakZh(b.dataset.aiSay);
+        });
+      }
     } catch {
-      document.getElementById(lid).textContent = 'Lỗi kết nối AI.';
+      const targetEl = document.getElementById(lid);
+      if (targetEl) {
+        targetEl.innerHTML = wordMatches.length
+          ? formatAIReplyHtml(`🐼 **${wordMatches[0].hanzi}** (${wordMatches[0].pinyin}) [HSK ${wordMatches[0].level}]: ${wordMatches[0].meaning}`)
+          : 'Không thể kết nối máy chủ AI lúc này. Vui lòng kiểm tra lại kết nối mạng.';
+      }
     }
     box.scrollTop = box.scrollHeight;
   };
-  document.getElementById('ai-send').onclick = send;
-  document.getElementById('ai-input').onkeydown = (e) => { if (e.key === 'Enter') send(); };
+
+  document.getElementById('ai-chat-form').onsubmit = (e) => {
+    e.preventDefault();
+    askQuestion();
+  };
+  document.querySelectorAll('[data-ai-quick]').forEach((btn) => {
+    btn.onclick = () => askQuestion(btn.dataset.aiQuick);
+  });
+  document.getElementById('ai-clear-chat').onclick = () => {
+    document.getElementById('ai-chat-box').innerHTML = `
+      <div class="chat-msg ai"><strong>Sư phụ Panda:</strong> Đã làm mới cuộc trò chuyện. Bạn muốn hỏi gì tiếp theo nào?</div>
+    `;
+  };
+  document.getElementById('ai-input')?.focus();
+}
+
+function renderAdminUsersModule(main) {
+  let searchQuery = '';
+  const revealedPasswords = new Set();
+
+  const refreshLeaderboardAndTopbar = async () => {
+    cloudLeaderboard = await fetchLeaderboard();
+    updateTopbar();
+  };
+
+  const openUserEditorModal = (existingUser = null) => {
+    const isEdit = Boolean(existingUser);
+    let pickedAv = existingUser?.avatar || '🐼';
+
+    openModal(`
+      <h3 class="card-title" style="margin-bottom:8px;padding-right:28px">
+        ${isEdit ? `✏️ Sửa tài khoản @${esc(existingUser.username)}` : '➕ Thêm tài khoản người dùng mới'}
+      </h3>
+      <form class="panda-auth-form" id="form-admin-user" novalidate>
+        <div class="panda-field-group">
+          <span class="panda-field-label">Chọn biểu tượng đại diện</span>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            ${AVATARS.map((av) => `<button type="button" class="btn btn-outline btn-sm" data-adm-av="${av}" style="font-size:1.15rem;border-color:${av === pickedAv ? 'var(--primary)' : 'var(--border)'}">${av}</button>`).join('')}
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="panda-field-group">
+            <label class="panda-field-label" for="adm-name">Tên hiển thị</label>
+            <input class="panda-input" type="text" id="adm-name" value="${esc(existingUser?.displayName || '')}" placeholder="VD: Lê Tiêu" maxlength="60" />
+          </div>
+          <div class="panda-field-group">
+            <label class="panda-field-label" for="adm-user">Tên đăng nhập (a-z, 0-9, _)</label>
+            <input class="panda-input" type="text" id="adm-user" value="${esc(existingUser?.username || '')}" placeholder="VD: tieu1710" maxlength="24" autocapitalize="none" spellcheck="false" />
+          </div>
+        </div>
+        <div class="panda-field-group">
+          <label class="panda-field-label" for="adm-pass">${isEdit ? 'Mật khẩu (Sửa trực tiếp hoặc để nguyên)' : 'Mật khẩu (tối thiểu 6 ký tự)'}</label>
+          <div class="panda-pass-wrap">
+            <input class="panda-pass-input" type="text" id="adm-pass" value="${esc(isEdit && !existingUser.passwordPlain.startsWith('(') ? existingUser.passwordPlain : '')}" placeholder="${isEdit ? 'Nhập mật khẩu mới cho tài khoản này...' : 'VD: Panda2026'}" autocomplete="off" />
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+          <div class="panda-field-group">
+            <label class="panda-field-label" for="adm-world">Cấp HSK (1–9)</label>
+            <input class="panda-input" type="number" id="adm-world" min="1" max="9" value="${Number(existingUser?.activeWorld || 1)}" />
+          </div>
+          <div class="panda-field-group">
+            <label class="panda-field-label" for="adm-xp">Điểm XP</label>
+            <input class="panda-input" type="number" id="adm-xp" min="0" step="10" value="${Number(existingUser?.xp || 0)}" />
+          </div>
+          <div class="panda-field-group">
+            <label class="panda-field-label" for="adm-coins">Xu (🪙 Coins)</label>
+            <input class="panda-input" type="number" id="adm-coins" min="0" step="5" value="${Number(existingUser?.coins || 0)}" />
+          </div>
+        </div>
+        ${isEdit ? `
+          <label style="display:flex;align-items:center;gap:8px;font-size:0.84rem;cursor:pointer">
+            <input type="checkbox" id="adm-hide-lb" ${existingUser.hideOnLeaderboard ? 'checked' : ''} style="width:auto" />
+            Ẩn tài khoản này khỏi Bảng xếp hạng công khai
+          </label>
+        ` : ''}
+        <div id="adm-err" class="panda-auth-error hidden" role="alert"></div>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button type="button" class="btn btn-outline" style="flex:1" id="btn-adm-cancel">Hủy</button>
+          <button type="submit" class="btn btn-primary" style="flex:1">${isEdit ? '💾 Lưu cập nhật' : '➕ Tạo tài khoản'}</button>
+        </div>
+      </form>
+    `);
+
+    document.querySelectorAll('[data-adm-av]').forEach((b) => {
+      b.onclick = () => {
+        pickedAv = b.dataset.admAv;
+        document.querySelectorAll('[data-adm-av]').forEach((x) => { x.style.borderColor = 'var(--border)'; });
+        b.style.borderColor = 'var(--primary)';
+      };
+    });
+    document.getElementById('btn-adm-cancel').onclick = closeModal;
+
+    document.getElementById('form-admin-user').onsubmit = async (e) => {
+      e.preventDefault();
+      const errEl = document.getElementById('adm-err');
+      errEl.classList.add('hidden');
+      const payload = {
+        displayName: document.getElementById('adm-name').value.trim(),
+        username: document.getElementById('adm-user').value.trim(),
+        newUsername: document.getElementById('adm-user').value.trim(),
+        password: document.getElementById('adm-pass').value.trim(),
+        newPassword: document.getElementById('adm-pass').value.trim(),
+        avatar: pickedAv,
+        activeWorld: Number(document.getElementById('adm-world').value || 1),
+        xp: Number(document.getElementById('adm-xp').value || 0),
+        coins: Number(document.getElementById('adm-coins').value || 0),
+        hideOnLeaderboard: document.getElementById('adm-hide-lb')?.checked || false
+      };
+
+      const res = isEdit
+        ? adminUpdateUser(existingUser.username, payload)
+        : adminCreateUser(payload);
+
+      if (!res.ok) {
+        errEl.textContent = res.error;
+        errEl.classList.remove('hidden');
+        return;
+      }
+
+      if (res.updatedCurrentUser) {
+        await store.bindUser(res.updatedCurrentUser);
+      }
+      await refreshLeaderboardAndTopbar();
+      closeModal();
+      renderTable();
+    };
+  };
+
+  const renderTable = () => {
+    const allUsers = adminListUsers();
+    const q = searchQuery.trim().toLowerCase();
+    const filtered = allUsers.filter(
+      (u) =>
+        !q ||
+        u.username.toLowerCase().includes(q) ||
+        u.displayName.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q)
+    );
+    const totalXp = allUsers.reduce((acc, u) => acc + u.xp, 0);
+    const totalWordsLearned = allUsers.reduce((acc, u) => acc + u.wordCount, 0);
+
+    main.innerHTML = `
+      <div class="card">
+        <div class="card-header" style="flex-wrap:wrap;gap:10px">
+          <div>
+            <h2 class="card-title">🛡️ Trung Tâm Quản Trị Người Dùng &amp; Tài Khoản</h2>
+            <p style="font-size:0.84rem;color:var(--text-muted);margin:4px 0 0">
+              Quản lý toàn bộ tài khoản, xem/đổi mật khẩu, mã khôi phục, điểm XP và Thêm / Sửa / Xóa / Chuyển nhanh tài khoản.
+            </p>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button type="button" class="btn btn-outline btn-sm" id="btn-adm-export-all">📥 Xuất toàn bộ TK (JSON)</button>
+            <button type="button" class="btn btn-primary btn-sm" id="btn-adm-add-user">➕ Thêm tài khoản mới</button>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:12px 0">
+          <div style="padding:12px;border-radius:12px;background:var(--surface-alt);border:1px solid var(--border)">
+            <div style="font-size:0.78rem;color:var(--text-muted);font-weight:700">TỔNG TÀI KHOẢN</div>
+            <div style="font-size:1.5rem;font-weight:900;color:var(--primary)">${allUsers.length} tài khoản</div>
+          </div>
+          <div style="padding:12px;border-radius:12px;background:var(--surface-alt);border:1px solid var(--border)">
+            <div style="font-size:0.78rem;color:var(--text-muted);font-weight:700">PHIÊN HIỆN TẠI</div>
+            <div style="font-size:1.1rem;font-weight:800;color:var(--green);margin-top:4px">${store.user ? `${esc(store.state.profile.avatar)} @${esc(store.currentUsername)}` : '☁️ Chế độ Khách'}</div>
+          </div>
+          <div style="padding:12px;border-radius:12px;background:var(--surface-alt);border:1px solid var(--border)">
+            <div style="font-size:0.78rem;color:var(--text-muted);font-weight:700">TỔNG ĐIỂM XP HỆ THỐNG</div>
+            <div style="font-size:1.5rem;font-weight:900;color:var(--text)">${totalXp.toLocaleString()} XP</div>
+          </div>
+          <div style="padding:12px;border-radius:12px;background:var(--surface-alt);border:1px solid var(--border)">
+            <div style="font-size:0.78rem;color:var(--text-muted);font-weight:700">TỔNG LƯỢT TỪ ĐÃ HỌC</div>
+            <div style="font-size:1.5rem;font-weight:900;color:var(--text)">${totalWordsLearned.toLocaleString()} từ</div>
+          </div>
+        </div>
+
+        <div style="margin:12px 0">
+          <input type="search" id="adm-search-inp" value="${esc(searchQuery)}" placeholder="🔍 Tìm kiếm tài khoản theo tên đăng nhập (@username), tên hiển thị hoặc email..." />
+        </div>
+
+        ${
+          filtered.length === 0
+            ? `<div style="text-align:center;padding:28px;border:1.5px dashed var(--border);border-radius:14px;color:var(--text-muted)">
+                <div style="font-weight:700;margin-bottom:6px">Chưa có tài khoản nào khớp với tìm kiếm</div>
+                <button type="button" class="btn btn-primary btn-sm" id="btn-adm-add-empty">➕ Tạo tài khoản đầu tiên</button>
+              </div>`
+            : `<div style="display:flex;flex-direction:column;gap:10px">
+                ${filtered
+                  .map((u) => {
+                    const isShown = revealedPasswords.has(u.username);
+                    const maskedPass = u.passwordPlain.startsWith('(')
+                      ? u.passwordPlain
+                      : isShown
+                      ? u.passwordPlain
+                      : '••••••••';
+                    return `
+                      <div style="padding:14px;border-radius:14px;border:1.5px solid ${u.isCurrentSession ? 'var(--primary)' : 'var(--border)'};background:${u.isCurrentSession ? 'var(--surface-alt)' : 'var(--bg)'};display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+                        <div style="display:flex;align-items:center;gap:12px;min-width:230px;flex:1">
+                          <div style="font-size:1.85rem;width:46px;height:46px;border-radius:12px;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center">${esc(u.avatar)}</div>
+                          <div>
+                            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                              <strong style="font-size:1rem">${esc(u.displayName)}</strong>
+                              <code style="font-size:0.82rem;color:var(--primary);font-weight:700">@${esc(u.username)}</code>
+                              <span class="badge-pill" style="font-size:0.72rem">${u.provider === 'google' ? '🔵 Google' : u.provider === 'facebook' ? '🔷 Facebook' : '🔑 Mật khẩu'}</span>
+                              ${u.isCurrentSession ? '<span class="badge-pill" style="background:#dcfce7;color:#15803d;font-size:0.72rem">🟢 Đang đăng nhập</span>' : ''}
+                            </div>
+                            <div style="font-size:0.8rem;color:var(--text-muted);margin-top:3px">
+                              Email: ${esc(u.email)} · Tạo lúc: ${esc(u.createdAt)}
+                            </div>
+                            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px;font-size:0.82rem">
+                              <span>🔐 <strong>Mật khẩu:</strong> <code style="background:var(--card);padding:2px 6px;border-radius:6px;border:1px solid var(--border)">${esc(maskedPass)}</code></span>
+                              ${!u.passwordPlain.startsWith('(') ? `<button type="button" class="btn btn-outline btn-sm" data-adm-toggle-pw="${esc(u.username)}" style="padding:2px 8px;font-size:0.75rem">${isShown ? '🙈 Ẩn' : '👁️ Xem'}</button>` : ''}
+                              <span>🛟 <strong>Mã khôi phục:</strong> <code style="font-size:0.76rem">${esc(u.recoveryCodePlain)}</code></span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                          <span class="badge-pill">HSK ${u.activeWorld}</span>
+                          <span class="badge-pill">⭐ ${u.xp} XP</span>
+                          <span class="badge-pill">🪙 ${u.coins}</span>
+                          <span class="badge-pill">📚 ${u.wordCount} từ · 📋 ${u.examCount} đề</span>
+                        </div>
+
+                        <div style="display:flex;gap:6px;flex-wrap:wrap">
+                          ${
+                            !u.isCurrentSession
+                              ? `<button type="button" class="btn btn-green btn-sm" data-adm-switch="${esc(u.username)}" title="Đăng nhập ngay vào tài khoản này">🔑 Đăng nhập</button>`
+                              : ''
+                          }
+                          <button type="button" class="btn btn-outline btn-sm" data-adm-edit="${esc(u.username)}">✏️ Sửa / Đổi MK</button>
+                          <button type="button" class="btn btn-outline btn-sm" data-adm-del="${esc(u.username)}" style="color:#dc2626;border-color:#fecaca">🗑️ Xóa</button>
+                        </div>
+                      </div>
+                    `;
+                  })
+                  .join('')}
+              </div>`
+        }
+      </div>
+    `;
+
+    document.getElementById('btn-adm-add-user').onclick = () => openUserEditorModal(null);
+    if (document.getElementById('btn-adm-add-empty')) {
+      document.getElementById('btn-adm-add-empty').onclick = () => openUserEditorModal(null);
+    }
+    document.getElementById('btn-adm-export-all').onclick = () => {
+      const blob = new Blob([JSON.stringify(allUsers, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `panda-hsk-users-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+    };
+
+    const searchInp = document.getElementById('adm-search-inp');
+    searchInp.oninput = () => {
+      searchQuery = searchInp.value;
+      renderTable();
+      const newInp = document.getElementById('adm-search-inp');
+      if (newInp) {
+        newInp.focus();
+        newInp.setSelectionRange(searchQuery.length, searchQuery.length);
+      }
+    };
+
+    document.querySelectorAll('[data-adm-toggle-pw]').forEach((b) => {
+      b.onclick = () => {
+        const u = b.dataset.admTogglePw;
+        if (revealedPasswords.has(u)) revealedPasswords.delete(u);
+        else revealedPasswords.add(u);
+        renderTable();
+      };
+    });
+
+    document.querySelectorAll('[data-adm-switch]').forEach((b) => {
+      b.onclick = async () => {
+        const u = b.dataset.admSwitch;
+        const res = adminSwitchToUser(u);
+        if (res.ok && res.user) {
+          await store.bindUser(res.user);
+          await refreshLeaderboardAndTopbar();
+          renderTable();
+        }
+      };
+    });
+
+    document.querySelectorAll('[data-adm-edit]').forEach((b) => {
+      b.onclick = () => {
+        const target = allUsers.find((u) => u.username === b.dataset.admEdit);
+        if (target) openUserEditorModal(target);
+      };
+    });
+
+    document.querySelectorAll('[data-adm-del]').forEach((b) => {
+      b.onclick = async () => {
+        const u = b.dataset.admDel;
+        if (!confirm(`Bạn có chắc chắn muốn XÓA VĨNH VIỄN tài khoản @${u} và toàn bộ dữ liệu học tập của tài khoản này không?`)) {
+          return;
+        }
+        const res = adminDeleteUser(u);
+        if (!res.ok) return alert(res.error);
+        if (res.deletedCurrentUser) {
+          await store.bindUser(null);
+        }
+        await refreshLeaderboardAndTopbar();
+        renderTable();
+      };
+    });
+  };
+
+  renderTable();
 }
 
 function openCreateDeckModal(onDone) {
@@ -1297,6 +1703,7 @@ function renderView(tab) {
   else if (tab === 'writing') renderWritingModule(main, allWords);
   else if (tab === 'dictionary') renderDictionaryModule(main, allWords, openModal, closeModal);
   else if (tab === 'stats') renderStatsModule(main, allWords);
+  else if (tab === 'admin-users') renderAdminUsersModule(main);
   else if (tab === 'arena') renderArenaModule(main, allWords, updateTopbar);
   else if (tab === 'review') startQuickQuiz(due.length ? due : fresh, 'Ôn tập từ vựng SRS', 'home');
 }

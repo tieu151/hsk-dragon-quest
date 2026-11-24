@@ -18,6 +18,7 @@ globalThis.window = {
 Object.defineProperty(globalThis, 'navigator', { value: { onLine: true }, writable: true, configurable: true });
 
 import configHandler from '../api/config.js';
+import chatHandler from '../api/chat.js';
 import {
   getSupabase,
   getSupabaseConnectionStatus,
@@ -28,7 +29,11 @@ import {
   authSocialSignIn,
   getSavedSocialProfiles,
   authResetPassword,
-  authChangePassword
+  authChangePassword,
+  adminListUsers,
+  adminCreateUser,
+  adminUpdateUser,
+  adminDeleteUser
 } from '../js/services/supabase-client.js';
 import { store } from '../js/storage/db.js';
 import { dataLoader } from '../js/data/loader.js';
@@ -102,6 +107,50 @@ const fbSign = await authSocialSignIn({ provider: 'facebook', email: 'tieu.fb@fa
 assert.equal(fbSign.ok, true, 'Dang nhap 1 cham Facebook Zero-Config phai thanh cong');
 assert.ok(getSavedSocialProfiles('google').length >= 1);
 assert.ok(getSavedSocialProfiles('facebook').length >= 1);
+
+// Kiem tra Admin User Management CRUD (Them, Sua, Doi mat khau, Xem danh sach, Xoa)
+const admAdd = adminCreateUser({
+  username: 'hocvien_vip',
+  password: 'VipPass123',
+  displayName: 'Học Viên VIP',
+  avatar: '🦁',
+  activeWorld: 5,
+  xp: 850,
+  coins: 120
+});
+assert.equal(admAdd.ok, true, 'Admin tao tai khoan moi phai thanh cong');
+let allAdmUsers = adminListUsers();
+const foundVip = allAdmUsers.find((u) => u.username === 'hocvien_vip');
+assert.ok(foundVip, 'Danh sach Admin phai co tai khoan vua tao');
+assert.equal(foundVip.passwordPlain, 'VipPass123');
+assert.equal(foundVip.xp, 850);
+
+const admEdit = adminUpdateUser('hocvien_vip', {
+  newUsername: 'hocvien_pro',
+  newPassword: 'ProPass999',
+  displayName: 'Học Viên PRO',
+  xp: 1200
+});
+assert.equal(admEdit.ok, true, 'Admin sua tai khoan va doi mat khau phai thanh cong');
+const loginPro = await authLogin({ username: 'hocvien_pro', password: 'ProPass999' });
+assert.equal(loginPro.ok, true, 'Dang nhap bang username va mat khau moi do Admin doi phai thanh cong');
+
+const admDel = adminDeleteUser('hocvien_pro');
+assert.equal(admDel.ok, true, 'Admin xoa tai khoan phai thanh cong');
+assert.equal(adminListUsers().some((u) => u.username === 'hocvien_pro'), false);
+
+// Kiem tra Su Phu AI Panda (api/chat.js) luon tra loi chinh xac ngay ca khi khong co GEMINI_API_KEY
+delete process.env.GEMINI_API_KEY;
+let chatPayload = {};
+await chatHandler(
+  { method: 'POST', headers: { 'x-panda-user': 'tieu1710' }, body: { message: 'chào trong tiếng trung là gì ?' } },
+  {
+    setHeader: () => {},
+    status: () => ({ json: (o) => { chatPayload = o; } })
+  }
+);
+assert.ok(chatPayload.reply && chatPayload.reply.includes('你好'), 'Su Phu AI phai tra loi chi tiet cau hoi chao tieng Trung');
+assert.equal(chatPayload.reply.includes('Sư Phụ AI đang bận'), false);
 
 // Kich ban (a), (b), (c): Validate dau vao & anh xa username -> email noi bo
 assert.equal(validateUsername('ab').ok, false);
