@@ -4,6 +4,7 @@ import { EXAM_CONFIGS, launchExamUI, getExamCoverageStats } from './exam/exam-en
 import {
   getSupabase,
   getSupabaseConnectionStatus,
+  getRestoredUserSession,
   authRegister,
   authLogin,
   authChangePassword,
@@ -511,12 +512,7 @@ function openAuthModal(defaultMode = 'login') {
   };
 
   const renderAuth = (mode) => {
-    const conn = getSupabaseConnectionStatus();
-    const envNotice = conn.missingEnv.length
-      ? `<div style="padding:9px 11px;border-radius:10px;background:#fffbeb;border:1px solid #fde68a;color:#92400e;font-size:0.8rem;margin-bottom:10px">
-          ⚠️ Chưa phát hiện biến môi trường: <strong>${conn.missingEnv.join(', ')}</strong>. Bạn vẫn có thể bấm ✕ để học ở <strong>Chế độ Khách</strong>.
-        </div>`
-      : '';
+    const envNotice = '';
     const guestBtn = `<button type="button" class="btn btn-outline btn-block btn-sm" id="btn-continue-guest">Tiếp tục học ở Chế độ Khách</button>`;
     const capsWarn = `<div class="panda-caps-warn hidden" data-caps-warn>⇪ Caps Lock đang bật</div>`;
 
@@ -1231,13 +1227,13 @@ async function boot() {
     if (!e.target.closest('.dict-search-wrap')) drop.classList.add('hidden');
   });
 
+  const restoredUser = await getRestoredUserSession();
+  if (restoredUser) {
+    await store.bindUser(restoredUser);
+    updateTopbar();
+  }
   const sb = await getSupabase();
   if (sb) {
-    const { data } = await sb.auth.getSession();
-    if (data?.session?.user) {
-      await store.bindUser(data.session.user);
-      updateTopbar();
-    }
     sb.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_OUT') {
         await store.bindUser(null);

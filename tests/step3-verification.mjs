@@ -24,7 +24,9 @@ import {
   validateUsername,
   usernameToInternalEmail,
   authLogin,
-  authRegister
+  authRegister,
+  authResetPassword,
+  authChangePassword
 } from '../js/services/supabase-client.js';
 import { store } from '../js/storage/db.js';
 import { dataLoader } from '../js/data/loader.js';
@@ -60,19 +62,36 @@ globalThis.fetch = async (url) => {
   return { ok: false, status: 404, json: async () => ({}) };
 };
 
-// Kich ban (f): Xoa het bien moi truong -> bao dung ten bien thieu + chay Che do Khach
+// Kich ban (f): Xoa het bien moi truong -> Built-in Zero-Config Auth Vault tu dong hoat dong hoan chinh
 delete process.env.SUPABASE_URL;
 delete process.env.SUPABASE_ANON_KEY;
 const sbMissing = await getSupabase(true);
 assert.equal(sbMissing, null);
 const statusMissing = getSupabaseConnectionStatus();
 assert.deepEqual(statusMissing.missingEnv, ['SUPABASE_URL', 'SUPABASE_ANON_KEY']);
-assert.ok(statusMissing.error.includes('SUPABASE_URL'));
-assert.ok(statusMissing.error.includes('SUPABASE_ANON_KEY'));
+assert.equal(statusMissing.mode, 'vault');
 
-const loginWhenMissing = await authLogin({ username: 'tieu1710', password: 'password123' });
-assert.equal(loginWhenMissing.ok, false);
-assert.ok(loginWhenMissing.error.includes('SUPABASE_URL'));
+const loginBeforeReg = await authLogin({ username: 'tieu1710', password: 'Password123' });
+assert.equal(loginBeforeReg.ok, false);
+
+const vaultReg = await authRegister({ username: 'tieu1710', password: 'Password123', displayName: 'Lê Tiêu', avatar: '🐉' });
+assert.equal(vaultReg.ok, true, 'Dang ky Zero-Config Vault phai thanh cong ngay ca khi chua co SUPABASE_URL');
+assert.ok(vaultReg.recoveryCode && vaultReg.recoveryCode.length === 19, 'Phai cap ma khoi phuc 16 ky tu');
+
+const vaultLoginOk = await authLogin({ username: 'tieu1710', password: 'Password123' });
+assert.equal(vaultLoginOk.ok, true);
+assert.equal(vaultLoginOk.user.user_metadata.username, 'tieu1710');
+
+const vaultResetOk = await authResetPassword({
+  username: 'tieu1710',
+  recoveryCode: vaultReg.recoveryCode,
+  newPassword: 'NewPass2026'
+});
+assert.equal(vaultResetOk.ok, true);
+assert.notEqual(vaultResetOk.recoveryCode, vaultReg.recoveryCode);
+
+const vaultChangeOk = await authChangePassword('NewPass2026', 'Panda2026ok');
+assert.equal(vaultChangeOk.ok, true);
 
 // Kich ban (a), (b), (c): Validate dau vao & anh xa username -> email noi bo
 assert.equal(validateUsername('ab').ok, false);

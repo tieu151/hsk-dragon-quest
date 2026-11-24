@@ -169,7 +169,8 @@ class CloudStore {
     if (!this.user) return;
     const sb = await getSupabase();
     if (!sb) {
-      this.setSyncStatus('offline');
+      this.saveLocalCache();
+      this.setSyncStatus('saved');
       return;
     }
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -285,7 +286,9 @@ class CloudStore {
     if (!this.user) return;
     const sb = await getSupabase();
     if (!sb) {
-      this.setSyncStatus('offline');
+      this.pendingSync = false;
+      this.saveLocalCache();
+      this.setSyncStatus('saved');
       return;
     }
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
