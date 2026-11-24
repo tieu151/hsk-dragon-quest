@@ -7,6 +7,8 @@ import {
   getRestoredUserSession,
   authRegister,
   authLogin,
+  authSocialSignIn,
+  getSavedSocialProfiles,
   authChangePassword,
   authLogout,
   authResetPassword,
@@ -515,6 +517,18 @@ function openAuthModal(defaultMode = 'login') {
     const envNotice = '';
     const guestBtn = `<button type="button" class="btn btn-outline btn-block btn-sm" id="btn-continue-guest">Tiếp tục học ở Chế độ Khách</button>`;
     const capsWarn = `<div class="panda-caps-warn hidden" data-caps-warn>⇪ Caps Lock đang bật</div>`;
+    const socialBarHtml = `
+      <div class="panda-social-divider"><span>Hoặc đăng nhập / đăng ký 1 chạm</span></div>
+      <div class="panda-social-grid">
+        <button type="button" class="panda-social-btn panda-social-google" id="btn-social-google">
+          <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+          <span>Google</span>
+        </button>
+        <button type="button" class="panda-social-btn panda-social-facebook" id="btn-social-facebook">
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="#1877F2" d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+          <span>Facebook</span>
+        </button>
+      </div>`;
 
     let formHtml = '';
     if (mode === 'login') {
@@ -531,6 +545,7 @@ function openAuthModal(defaultMode = 'login') {
           </div>
           <div id="auth-err" class="panda-auth-error hidden" role="alert"></div>
           <button type="submit" class="btn btn-primary btn-block" id="btn-submit-login">Đăng nhập vào Panda HSK</button>
+          ${socialBarHtml}
           ${guestBtn}
         </form>`;
     } else if (mode === 'register') {
@@ -562,6 +577,7 @@ function openAuthModal(defaultMode = 'login') {
             <a href="#privacy" id="lnk-privacy" style="color:var(--primary)">Chính sách bảo mật</a>. Không cần email — sau khi tạo, bạn sẽ nhận <strong>mã khôi phục</strong> để lấy lại tài khoản khi quên mật khẩu.
           </div>
           <button type="submit" class="btn btn-green btn-block" id="btn-submit-reg">🚀 Tạo tài khoản &amp; Vào học ngay</button>
+          ${socialBarHtml}
           ${guestBtn}
         </form>`;
     } else {
@@ -635,6 +651,103 @@ function openAuthModal(defaultMode = 'login') {
     if (tabReg) tabReg.onclick = () => { if (!isSubmitting) renderAuth('register'); };
     const guest = document.getElementById('btn-continue-guest');
     if (guest) guest.onclick = closeModal;
+
+    const openSocialOneTap = (provider) => {
+      const isGoogle = provider === 'google';
+      const brandName = isGoogle ? 'Google' : 'Facebook';
+      const brandColor = isGoogle ? '#4285F4' : '#1877F2';
+      const savedProfiles = getSavedSocialProfiles(provider);
+
+      openModal(`
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;padding-right:28px">
+          <div style="width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:${isGoogle ? '#f8fafc' : '#eff6ff'};border:1px solid var(--border)">
+            ${isGoogle
+              ? '<svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>'
+              : '<svg width="20" height="20" viewBox="0 0 24 24"><path fill="#1877F2" d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>'}
+          </div>
+          <div>
+            <h3 class="card-title" style="margin:0">Tiếp tục với ${brandName}</h3>
+            <div style="font-size:0.78rem;color:var(--text-muted)">Đăng nhập &amp; đồng bộ 1 chạm vào Panda HSK</div>
+          </div>
+        </div>
+
+        ${
+          savedProfiles.length > 0
+            ? `<div style="margin:12px 0">
+                <div style="font-size:0.8rem;font-weight:700;color:var(--text-muted);margin-bottom:6px">Chọn tài khoản ${brandName} đã lưu trên máy này:</div>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  ${savedProfiles
+                    .map(
+                      (sp) => `
+                      <button type="button" class="panda-onetap-account" data-onetap-email="${esc(sp.email)}" data-onetap-name="${esc(sp.displayName)}">
+                        <span style="font-size:1.35rem">${esc(sp.avatar)}</span>
+                        <div style="text-align:left;flex:1">
+                          <div style="font-weight:800;font-size:0.9rem;color:var(--text)">${esc(sp.displayName)}</div>
+                          <div style="font-size:0.78rem;color:var(--text-muted)">${esc(sp.email)} · @${esc(sp.username)}</div>
+                        </div>
+                        <span style="font-size:0.8rem;font-weight:700;color:${brandColor}">Vào ngay →</span>
+                      </button>`
+                    )
+                    .join('')}
+                </div>
+              </div>`
+            : ''
+        }
+
+        <form class="panda-auth-form" id="form-social-onetap" novalidate style="margin-top:10px">
+          <div class="panda-field-group">
+            <label class="panda-field-label" for="soc-email">${isGoogle ? 'Địa chỉ Gmail của bạn' : 'Email hoặc tên tài khoản Facebook'}</label>
+            <input class="panda-input" type="email" id="soc-email" placeholder="${isGoogle ? 'VD: letieu@gmail.com' : 'VD: letieu@facebook.com hoặc tieu1710'}" autocomplete="email" autocapitalize="none" spellcheck="false" />
+          </div>
+          <div class="panda-field-group">
+            <label class="panda-field-label" for="soc-name">Tên hiển thị trên Panda HSK (tùy chọn)</label>
+            <input class="panda-input" type="text" id="soc-name" placeholder="VD: Lê Tiêu" autocomplete="name" maxlength="60" />
+          </div>
+          <div id="soc-err" class="panda-auth-error hidden" role="alert"></div>
+          <button type="submit" class="btn btn-primary btn-block" id="btn-submit-social" style="background:${brandColor};border-color:${brandColor}">
+            🚀 Tiếp tục với ${brandName}
+          </button>
+          <button type="button" class="btn btn-outline btn-block btn-sm" id="btn-social-back">← Quay lại</button>
+        </form>
+      `);
+
+      document.getElementById('btn-social-back').onclick = () => renderAuth(mode);
+      document.querySelectorAll('[data-onetap-email]').forEach((btn) => {
+        btn.onclick = async () => {
+          const res = await authSocialSignIn({
+            provider,
+            email: btn.dataset.onetapEmail,
+            displayName: btn.dataset.onetapName
+          });
+          if (res.ok && res.user) await onAuthSuccess(res.user);
+        };
+      });
+
+      const socForm = document.getElementById('form-social-onetap');
+      const socEmailInp = document.getElementById('soc-email');
+      if (socEmailInp) socEmailInp.focus();
+      socForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const errBox = document.getElementById('soc-err');
+        errBox.classList.add('hidden');
+        const res = await authSocialSignIn({
+          provider,
+          email: document.getElementById('soc-email').value,
+          displayName: document.getElementById('soc-name').value
+        });
+        if (!res.ok) {
+          errBox.textContent = res.error;
+          errBox.classList.remove('hidden');
+          return;
+        }
+        if (res.user) await onAuthSuccess(res.user);
+      };
+    };
+
+    const btnGoogle = document.getElementById('btn-social-google');
+    const btnFacebook = document.getElementById('btn-social-facebook');
+    if (btnGoogle) btnGoogle.onclick = () => { if (!isSubmitting) openSocialOneTap('google'); };
+    if (btnFacebook) btnFacebook.onclick = () => { if (!isSubmitting) openSocialOneTap('facebook'); };
 
     // ----- Đăng nhập -----
     const loginForm = document.getElementById('form-login');

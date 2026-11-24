@@ -174,12 +174,143 @@ function toPublicUserObject(acc) {
     user_metadata: {
       username: acc.username,
       display_name: acc.displayName || acc.username,
-      avatar_url: acc.avatar || '🐼'
+      avatar_url: acc.avatar || '🐼',
+      social_provider: acc.provider || null,
+      social_email: acc.socialEmail || null
     },
     app_metadata: {
-      provider: 'panda_vault',
+      provider: acc.provider || 'panda_vault',
       panda_recovery: Boolean(acc.recoveryHash)
     }
+  };
+}
+
+export function getSavedSocialProfiles(provider = '') {
+  const accounts = Object.values(loadVaultAccounts());
+  return accounts
+    .filter((a) => (provider ? a.provider === provider : Boolean(a.provider)))
+    .sort((a, b) => String(b.lastLoginAt || b.createdAt || '').localeCompare(String(a.lastLoginAt || a.createdAt || '')))
+    .map((a) => ({
+      username: a.username,
+      displayName: a.displayName || a.username,
+      email: a.socialEmail || a.email,
+      avatar: a.avatar || '🐼',
+      provider: a.provider
+    }));
+}
+
+function sanitizeEmailToUsername(rawInput, provider = 'google') {
+  const raw = String(rawInput || '').trim().toLowerCase();
+  const localPart = raw.split('@')[0] || '';
+  let cleaned = localPart
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/[^a-z0-9_]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+
+  if (cleaned.length < 3) {
+    cleaned = `${provider === 'facebook' ? 'fb' : 'gg'}_${cleaned || 'user'}`;
+  }
+  if (cleaned.length > 24) {
+    cleaned = cleaned.slice(0, 24);
+  }
+  if (RESERVED_USERNAMES.has(cleaned)) {
+    cleaned = `${provider === 'facebook' ? 'fb' : 'gg'}_${cleaned}`.slice(0, 24);
+  }
+  return cleaned;
+}
+
+export async function authSocialSignIn({ provider, email, displayName, avatar }) {
+  const prov = provider === 'facebook' ? 'facebook' : 'google';
+  const cleanEmail = String(email || '').trim().toLowerCase();
+  if (!cleanEmail || cleanEmail.length < 3) {
+    return {
+      ok: false,
+      error: prov === 'google'
+        ? 'Vui lòng nhập địa chỉ Gmail của bạn (VD: tenban@gmail.com).'
+        : 'Vui lòng nhập email hoặc ID Facebook của bạn.'
+    };
+  }
+  if (prov === 'google' && !cleanEmail.includes('@')) {
+    return { ok: false, error: 'Vui lòng nhập địa chỉ email hợp lệ (VD: tenban@gmail.com).' };
+  }
+
+  // Nếu máy chủ có kết nối Supabase Cloud và bật chế độ OAuth redirect
+  const sb = await getSupabase();
+  if (sb && typeof window !== 'undefined' && window.location?.search?.includes('use_supabase_oauth=1')) {
+    const { error } = await sb.auth.signInWithOAuth({
+      provider: prov,
+      options: { redirectTo: window.location.origin }
+    });
+    if (error) return { ok: false, error: mapAuthError(error) };
+    return { ok: true, redirecting: true };
+  }
+
+  // Zero-Config Social One-Tap Auth Vault (Đăng nhập/Đăng ký 1 chạm không cần cấu hình Client ID ngoài)
+  const accounts = loadVaultAccounts();
+  let existing = Object.values(accounts).find(
+    (a) => (a.socialEmail && a.socialEmail.toLowerCase() === cleanEmail) || a.username === cleanEmail
+  );
+
+  let isNewAccount = false;
+  let recoveryCode = null;
+
+  if (!existing) {
+    let baseUser = sanitizeEmailToUsername(cleanEmail, prov);
+    let candidate = baseUser;
+    let suffix = 1;
+    while (accounts[candidate]) {
+      const tail = String(++suffix);
+      candidate = `${baseUser.slice(0, 24 - tail.length)}${tail}`;
+    }
+
+    const autoName =
+      String(displayName || '').replace(/[<>"'`]/g, '').trim() ||
+      cleanEmail.split('@')[0] ||
+      candidate;
+
+    const passSalt = randomHex(12);
+    const recSalt = randomHex(12);
+    recoveryCode = generateClientRecoveryCode();
+    const autoSecret = randomHex(16);
+
+    existing = {
+      id: `uid_${prov}_${candidate}_${randomHex(5)}`,
+      username: candidate,
+      email: usernameToInternalEmail(candidate),
+      socialEmail: cleanEmail.includes('@') ? cleanEmail : `${cleanEmail}@${prov}.com`,
+      provider: prov,
+      displayName: autoName.slice(0, 60),
+      avatar: avatar || (prov === 'google' ? '🐼' : '🐉'),
+      passSalt,
+      passHash: hashSecretWithSalt(autoSecret, passSalt),
+      recoverySalt: recSalt,
+      recoveryHash: hashSecretWithSalt(normalizeRecoveryCode(recoveryCode), recSalt),
+      createdAt: new Date().toISOString(),
+      lastLoginAt: new Date().toISOString()
+    };
+    accounts[candidate] = existing;
+    isNewAccount = true;
+  } else {
+    existing.lastLoginAt = new Date().toISOString();
+    if (displayName && String(displayName).trim()) {
+      existing.displayName = String(displayName).replace(/[<>"'`]/g, '').trim().slice(0, 60);
+    }
+    if (!existing.provider) existing.provider = prov;
+    if (!existing.socialEmail) existing.socialEmail = cleanEmail;
+    accounts[existing.username] = existing;
+  }
+
+  saveVaultAccounts(accounts);
+  const { user, session } = createVaultSession(existing);
+  return {
+    ok: true,
+    user,
+    session,
+    isNewAccount,
+    recoveryCode: null // Tài khoản MXH đăng nhập 1 chạm theo email nên vào thẳng không bắt lưu mã
   };
 }
 

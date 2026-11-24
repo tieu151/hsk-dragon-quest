@@ -25,6 +25,8 @@ import {
   usernameToInternalEmail,
   authLogin,
   authRegister,
+  authSocialSignIn,
+  getSavedSocialProfiles,
   authResetPassword,
   authChangePassword
 } from '../js/services/supabase-client.js';
@@ -92,6 +94,14 @@ assert.notEqual(vaultResetOk.recoveryCode, vaultReg.recoveryCode);
 
 const vaultChangeOk = await authChangePassword('NewPass2026', 'Panda2026ok');
 assert.equal(vaultChangeOk.ok, true);
+
+const googleSign = await authSocialSignIn({ provider: 'google', email: 'letieu.hsk@gmail.com', displayName: 'Lê Tiêu Google' });
+assert.equal(googleSign.ok, true, 'Dang nhap 1 cham Google Zero-Config phai thanh cong');
+assert.equal(googleSign.user.user_metadata.social_provider, 'google');
+const fbSign = await authSocialSignIn({ provider: 'facebook', email: 'tieu.fb@facebook.com', displayName: 'Lê Tiêu FB' });
+assert.equal(fbSign.ok, true, 'Dang nhap 1 cham Facebook Zero-Config phai thanh cong');
+assert.equal(getSavedSocialProfiles('google').length, 1);
+assert.equal(getSavedSocialProfiles('facebook').length, 1);
 
 // Kich ban (a), (b), (c): Validate dau vao & anh xa username -> email noi bo
 assert.equal(validateUsername('ab').ok, false);

@@ -436,6 +436,65 @@ input[type="text"], input[type="search"], select, textarea {
   cursor: pointer;
 }
 .panda-link-btn:hover { text-decoration: underline; }
+.panda-social-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-muted, #64748b);
+  font-size: 0.76rem;
+  font-weight: 600;
+  margin: 2px 0;
+}
+.panda-social-divider::before,
+.panda-social-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border, #e2e8f0);
+}
+.panda-social-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.panda-social-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border, #cbd5e1);
+  background: var(--card, #ffffff);
+  color: var(--text, #0f172a);
+  font-family: inherit;
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.1s ease;
+}
+.panda-social-btn:hover {
+  border-color: var(--primary, #c23b2b);
+  background: var(--surface-alt, #f8fafc);
+}
+.panda-onetap-account {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1.5px solid var(--border, #cbd5e1);
+  background: var(--bg, #f8fafc);
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.panda-onetap-account:hover {
+  border-color: var(--primary, #c23b2b);
+  background: var(--surface-alt, #fff7ed);
+}
 .panda-hp {
   position: absolute !important;
   left: -9999px !important;
