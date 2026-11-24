@@ -6,12 +6,14 @@ let supabaseClient = null;
 let initPromise = null;
 let lastConfigError = '';
 let missingEnvNames = [];
+let cachedOAuthConfig = { googleClientId: '', facebookAppId: '' };
 const USERNAME_DOMAIN = 'pandahsk.app';
 export const MIN_PASSWORD = 8;
 export const MAX_PASSWORD = 72;
 
 const VAULT_ACCOUNTS_KEY = 'panda_hsk_auth_vault_v2';
 const VAULT_SESSION_KEY = 'panda_hsk_active_session_v2';
+const OAUTH_CLIENT_STORAGE_KEY = 'panda_hsk_oauth_client_ids_v1';
 const USER_CACHE_PREFIX = 'panda_hsk_cloud_cache_v1_';
 const RECOVERY_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const RESERVED_USERNAMES = new Set([
@@ -185,55 +187,187 @@ function toPublicUserObject(acc) {
   };
 }
 
-const DEFAULT_GOOGLE_CHOOSER_ACCOUNTS = [
-  { username: 'tentoilatieu', displayName: 'Tiêu Lê Khả', email: 'tentoilatieu@gmail.com', badge: 'T', badgeBg: '#c5221f', avatar: '🐼', provider: 'google' },
-  { username: 'tieule2k5', displayName: 'tiêu lê khả', email: 'tieule2k5@gmail.com', badge: 'T', badgeBg: '#e65100', avatar: '🐉', provider: 'google' },
-  { username: 'tieuletieu1', displayName: 'le tieu', email: 'tieuletieu1@gmail.com', badge: 'le', badgeBg: '#7b1fa2', avatar: '🐯', provider: 'google' },
-  { username: 'lepham2055', displayName: 'hoạt hình Nhật phim', email: 'lepham2055@gmail.com', badge: 'H', badgeBg: '#5d4037', avatar: '🦊', provider: 'google' },
-  { username: 'thanhphong201188', displayName: 'Phong Thanh', email: 'thanhphong201188@gmail.com', badge: 'P', badgeBg: '#bf360c', avatar: '🦁', provider: 'google' },
-  { username: 'bibotbien555', displayName: 'Tiêu Lê', email: 'bibotbien555@gmail.com', badge: 'T', badgeBg: '#d84315', avatar: '🐰', provider: 'google' },
-  { username: 'tien2341aa', displayName: 'Tiến Phan tien', email: 'tien2341aa@gmail.com', badge: 'T', badgeBg: '#2e4c59', avatar: '🦅', provider: 'google' },
-  { username: 'faifi786', displayName: 'Fai FI', email: 'faifi786@gmail.com', badge: 'F', badgeBg: '#e64a19', avatar: '🦄', provider: 'google' },
-  { username: 'lepham2057', displayName: 'Phạm Lê', email: 'lepham2057@gmail.com', badge: 'P', badgeBg: '#b71c1c', avatar: '🐼', provider: 'google' },
-  { username: 'tieu171005', displayName: 'tiêu tiên', email: 'tieu171005@gmail.com', badge: 't', badgeBg: '#7986cb', avatar: '🐉', provider: 'google' }
-];
-
-const DEFAULT_FACEBOOK_CHOOSER_ACCOUNTS = [
-  { username: 'tentoilatieu_fb', displayName: 'Tiêu Lê Khả', email: 'tentoilatieu@gmail.com', badge: 'T', badgeBg: '#1877F2', avatar: '🐼', provider: 'facebook' },
-  { username: 'tieule2k5_fb', displayName: 'Tiêu Lê', email: 'tieule2k5@gmail.com', badge: 'T', badgeBg: '#0d47a1', avatar: '🐉', provider: 'facebook' },
-  { username: 'thanhphong_fb', displayName: 'Phong Thanh', email: 'thanhphong201188@gmail.com', badge: 'P', badgeBg: '#1565c0', avatar: '🦁', provider: 'facebook' }
-];
-
-function computeInitialBadge(name, email) {
-  const src = String(name || email || 'U').trim();
-  return src.slice(0, 1).toUpperCase();
-}
-
 export function getSavedSocialProfiles(provider = '') {
   const accounts = Object.values(loadVaultAccounts());
-  const saved = accounts
+  return accounts
     .filter((a) => (provider ? a.provider === provider : Boolean(a.provider)))
     .sort((a, b) => String(b.lastLoginAt || b.createdAt || '').localeCompare(String(a.lastLoginAt || a.createdAt || '')))
     .map((a) => ({
       username: a.username,
       displayName: a.displayName || a.username,
       email: a.socialEmail || a.email,
-      badge: a.badge || computeInitialBadge(a.displayName, a.socialEmail),
-      badgeBg: a.badgeBg || (a.provider === 'facebook' ? '#1877F2' : '#c5221f'),
       avatar: a.avatar || '🐼',
       provider: a.provider
     }));
+}
 
-  const defaults = provider === 'facebook' ? DEFAULT_FACEBOOK_CHOOSER_ACCOUNTS : DEFAULT_GOOGLE_CHOOSER_ACCOUNTS;
-  const seenEmails = new Set(saved.map((s) => String(s.email || '').toLowerCase()));
-  const merged = [...saved];
-  for (const item of defaults) {
-    if (!seenEmails.has(item.email.toLowerCase())) {
-      merged.push(item);
-      seenEmails.add(item.email.toLowerCase());
+export function getOAuthClientIds() {
+  const localCfg = readLocalJson(OAUTH_CLIENT_STORAGE_KEY, {});
+  return {
+    googleClientId: cachedOAuthConfig.googleClientId || String(localCfg?.googleClientId || '').trim(),
+    facebookAppId: cachedOAuthConfig.facebookAppId || String(localCfg?.facebookAppId || '').trim()
+  };
+}
+
+export function saveLocalOAuthClientIds({ googleClientId, facebookAppId }) {
+  const cur = getOAuthClientIds();
+  const next = {
+    googleClientId: googleClientId !== undefined ? String(googleClientId).trim() : cur.googleClientId,
+    facebookAppId: facebookAppId !== undefined ? String(facebookAppId).trim() : cur.facebookAppId
+  };
+  cachedOAuthConfig = { ...next };
+  writeLocalJson(OAUTH_CLIENT_STORAGE_KEY, next);
+  return next;
+}
+
+// Tạo URL chuyển hướng sang trang Chọn tài khoản thật của Google (accounts.google.com/v3/signin/accountchooser)
+// hoặc Facebook OAuth Dialog
+export async function startRealOAuthRedirect(provider = 'google') {
+  const sb = await getSupabase();
+  const ids = getOAuthClientIds();
+  const origin = typeof window !== 'undefined' ? window.location.origin + window.location.pathname : '';
+
+  if (provider === 'google') {
+    if (ids.googleClientId) {
+      const nonce = randomHex(12);
+      const state = `panda_google_${randomHex(8)}`;
+      const params = new URLSearchParams({
+        client_id: ids.googleClientId,
+        redirect_uri: origin,
+        response_type: 'token id_token',
+        scope: 'openid email profile',
+        prompt: 'select_account',
+        include_granted_scopes: 'true',
+        nonce,
+        state
+      });
+      const url = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+      if (typeof window !== 'undefined') window.location.assign(url);
+      return { ok: true, redirecting: true, url };
+    }
+    if (sb && typeof window !== 'undefined') {
+      const { data, error } = await sb.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: origin,
+          queryParams: { prompt: 'select_account' }
+        }
+      });
+      if (!error && data?.url) return { ok: true, redirecting: true, url: data.url };
+    }
+    return { ok: false, needsClientId: true, provider: 'google' };
+  }
+
+  if (provider === 'facebook') {
+    if (ids.facebookAppId) {
+      const state = `panda_facebook_${randomHex(8)}`;
+      const params = new URLSearchParams({
+        client_id: ids.facebookAppId,
+        redirect_uri: origin,
+        response_type: 'token',
+        scope: 'public_profile,email',
+        state
+      });
+      const url = `https://www.facebook.com/v19.0/dialog/oauth?${params.toString()}`;
+      if (typeof window !== 'undefined') window.location.assign(url);
+      return { ok: true, redirecting: true, url };
+    }
+    if (sb && typeof window !== 'undefined') {
+      const { data, error } = await sb.auth.signInWithOAuth({
+        provider: 'facebook',
+        options: { redirectTo: origin }
+      });
+      if (!error && data?.url) return { ok: true, redirecting: true, url: data.url };
+    }
+    return { ok: false, needsClientId: true, provider: 'facebook' };
+  }
+
+  return { ok: false, error: 'Provider không hợp lệ.' };
+}
+
+function decodeJwtPayload(jwt) {
+  try {
+    const parts = String(jwt || '').split('.');
+    if (parts.length !== 3) return null;
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const json = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
+// Tự động bắt token trả về từ accounts.google.com hoặc facebook.com sau khi người dùng chọn tài khoản
+export async function consumeOAuthCallbackFromUrl() {
+  if (typeof window === 'undefined' || !window.location?.hash) return null;
+  const rawHash = window.location.hash.replace(/^#/, '');
+  if (!rawHash.includes('access_token=') && !rawHash.includes('id_token=')) return null;
+
+  const params = new URLSearchParams(rawHash);
+  const idToken = params.get('id_token') || '';
+  const accessToken = params.get('access_token') || '';
+  const state = params.get('state') || '';
+
+  // Xóa token khỏi thanh địa chỉ để URL sạch và bảo mật
+  try {
+    window.history.replaceState(null, document.title, window.location.pathname + window.location.search);
+  } catch {}
+
+  // 1. Giải mã id_token từ Google OIDC
+  if (idToken) {
+    const payload = decodeJwtPayload(idToken);
+    if (payload?.email) {
+      const res = await authSocialSignIn({
+        provider: 'google',
+        email: payload.email,
+        displayName: payload.name || payload.given_name || payload.email.split('@')[0]
+      });
+      if (res.ok) return res.user;
     }
   }
-  return merged;
+
+  // 2. Hoặc lấy thông tin từ access_token (Google UserInfo / Facebook Graph API)
+  if (accessToken) {
+    const isFb = state.startsWith('panda_facebook_');
+    try {
+      if (isFb) {
+        const fbRes = await fetch(
+          `https://graph.facebook.com/me?fields=id,name,email&access_token=${encodeURIComponent(accessToken)}`
+        );
+        if (fbRes.ok) {
+          const fbUser = await fbRes.json();
+          const email = fbUser.email || `${fbUser.id}@facebook.com`;
+          const res = await authSocialSignIn({
+            provider: 'facebook',
+            email,
+            displayName: fbUser.name || 'Học viên Facebook'
+          });
+          if (res.ok) return res.user;
+        }
+      } else {
+        const ggRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        });
+        if (ggRes.ok) {
+          const ggUser = await ggRes.json();
+          if (ggUser?.email) {
+            const res = await authSocialSignIn({
+              provider: 'google',
+              email: ggUser.email,
+              displayName: ggUser.name || ggUser.given_name || ggUser.email.split('@')[0]
+            });
+            if (res.ok) return res.user;
+          }
+        }
+      }
+    } catch {}
+  }
+  return null;
 }
 
 function sanitizeEmailToUsername(rawInput, provider = 'google') {
@@ -432,6 +566,8 @@ export async function getSupabase(forceRetry = false) {
       const cfg = await res.json().catch(() => ({}));
       const url = String(cfg?.supabaseUrl || '').trim();
       const anonKey = String(cfg?.supabaseAnonKey || '').trim();
+      if (cfg?.googleClientId) cachedOAuthConfig.googleClientId = String(cfg.googleClientId).trim();
+      if (cfg?.facebookAppId) cachedOAuthConfig.facebookAppId = String(cfg.facebookAppId).trim();
 
       if (!url) missingEnvNames.push('SUPABASE_URL');
       if (!anonKey) missingEnvNames.push('SUPABASE_ANON_KEY');

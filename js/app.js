@@ -9,6 +9,10 @@ import {
   authLogin,
   authSocialSignIn,
   getSavedSocialProfiles,
+  startRealOAuthRedirect,
+  consumeOAuthCallbackFromUrl,
+  getOAuthClientIds,
+  saveLocalOAuthClientIds,
   authChangePassword,
   authLogout,
   authResetPassword,
@@ -650,125 +654,74 @@ function openAuthModal(defaultMode = 'login') {
     const guest = document.getElementById('btn-continue-guest');
     if (guest) guest.onclick = closeModal;
 
-    const openSocialOneTap = (provider) => {
+    const openSocialOneTap = async (provider) => {
       const isGoogle = provider === 'google';
       const brandName = isGoogle ? 'Google' : 'Facebook';
       const brandColor = isGoogle ? '#0b57d0' : '#1877F2';
-      const savedProfiles = getSavedSocialProfiles(provider);
-      const modalCard = document.querySelector('#modal-backdrop .modal-card');
-      if (modalCard) modalCard.classList.add('is-google-chooser');
 
-      const restoreCardClass = () => {
-        if (modalCard) modalCard.classList.remove('is-google-chooser');
-      };
+      // Nếu đã có GOOGLE_CLIENT_ID / FACEBOOK_APP_ID (hoặc Supabase OAuth) -> chuyển hướng thẳng tới
+      // trang Chọn tài khoản chính thức https://accounts.google.com/v3/signin/accountchooser
+      const oauthRes = await startRealOAuthRedirect(provider);
+      if (oauthRes.ok && oauthRes.redirecting) return;
+
+      const originUrl = typeof window !== 'undefined' ? window.location.origin : 'https://ten-web-cua-ban.vercel.app';
+      const curIds = getOAuthClientIds();
 
       openModal(`
-        <div class="gchooser-shell">
-          <div class="gchooser-topbar">
-            ${isGoogle
-              ? '<svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>'
-              : '<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path fill="#1877F2" d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>'}
-            <span>Đăng nhập bằng ${brandName}</span>
-          </div>
+        <h3 class="card-title" style="margin-bottom:6px;padding-right:28px">🔗 Kết nối ${brandName} OAuth thật (${isGoogle ? 'accounts.google.com' : 'facebook.com'})</h3>
+        <p style="font-size:0.83rem;color:var(--text-muted);margin:0 0 10px;line-height:1.45">
+          Để trình duyệt chuyển hướng sang trang <strong>Chọn tài khoản ${brandName}</strong> chính thức (liệt kê mọi tài khoản ${brandName} có sẵn trên máy của người dùng), Google/Meta yêu cầu mã <code>${isGoogle ? 'GOOGLE_CLIENT_ID' : 'FACEBOOK_APP_ID'}</code> của bạn.
+        </p>
 
-          <div class="gchooser-body">
-            <div class="gchooser-left">
-              <h2 class="gchooser-title">Chọn tài khoản</h2>
-              <div class="gchooser-sub">Tiếp tục tới <span style="color:${brandColor};font-weight:600">Panda HSK</span></div>
-              <button type="button" class="panda-link-btn" id="btn-social-back" style="margin-top:24px;font-size:0.84rem;color:#444746">← Quay lại</button>
-            </div>
-
-            <div class="gchooser-right-wrap">
-              <div class="gchooser-list" id="gchooser-scroll-list">
-                ${savedProfiles
-                  .map(
-                    (sp) => `
-                    <button type="button" class="gchooser-row" data-onetap-email="${esc(sp.email)}" data-onetap-name="${esc(sp.displayName)}" data-onetap-avatar="${esc(sp.avatar)}">
-                      <span class="gchooser-avatar" style="background:${esc(sp.badgeBg || '#c5221f')}">${esc(sp.badge || sp.displayName.slice(0, 1).toUpperCase())}</span>
-                      <div class="gchooser-info">
-                        <div class="gchooser-name">${esc(sp.displayName)}</div>
-                        <div class="gchooser-email">${esc(sp.email)}</div>
-                      </div>
-                    </button>`
-                  )
-                  .join('')}
-
-                <button type="button" class="gchooser-row" id="btn-show-custom-social">
-                  <span class="gchooser-avatar" style="background:transparent;color:#444746;border:1.5px solid #747775;font-size:1rem">👤+</span>
-                  <div class="gchooser-info">
-                    <div class="gchooser-name">Sử dụng một tài khoản khác</div>
-                  </div>
-                </button>
-              </div>
-              <button type="button" class="gchooser-scroll-fab" id="btn-gchooser-down" aria-label="Cuộn xuống" title="Xem thêm tài khoản">↓</button>
-
-              <form class="panda-auth-form hidden" id="form-social-onetap" novalidate style="margin-top:12px;padding:12px;border-radius:12px;background:var(--surface-alt);border:1px solid var(--border)">
-                <div class="panda-field-group">
-                  <label class="panda-field-label" for="soc-email">${isGoogle ? 'Nhập Gmail khác' : 'Nhập tài khoản Facebook khác'}</label>
-                  <input class="panda-input" type="email" id="soc-email" placeholder="${isGoogle ? 'tenban@gmail.com' : 'tenban@facebook.com'}" autocomplete="email" autocapitalize="none" spellcheck="false" />
-                </div>
-                <div id="soc-err" class="panda-auth-error hidden" role="alert"></div>
-                <button type="submit" class="btn btn-primary btn-block" id="btn-submit-social" style="background:${brandColor};border-color:${brandColor}">
-                  Tiếp tục
-                </button>
-              </form>
-            </div>
-          </div>
+        <div style="padding:10px 12px;border-radius:10px;background:var(--surface-alt);border:1px solid var(--border);font-size:0.8rem;line-height:1.5;margin-bottom:12px">
+          ${isGoogle ? `
+            <strong>3 bước lấy mã Google Client ID (chỉ mất 1 phút):</strong>
+            <ol style="margin:6px 0 0 18px;padding:0">
+              <li>Mở <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener" style="color:${brandColor};font-weight:700">Google Cloud Console → Credentials</a></li>
+              <li>Bấm <strong>+ CREATE CREDENTIALS</strong> → chọn <strong>OAuth client ID</strong> → loại <strong>Web application</strong>.</li>
+              <li>Tại cả 2 mục <strong>Authorized JavaScript origins</strong> và <strong>Authorized redirect URIs</strong>, dán địa chỉ web này vào:<br/>
+                <code style="user-select:all;background:var(--card);padding:2px 6px;border-radius:4px;border:1px solid var(--border)">${esc(originUrl)}</code>
+              </li>
+            </ol>
+          ` : `
+            <strong>3 bước lấy Facebook App ID:</strong>
+            <ol style="margin:6px 0 0 18px;padding:0">
+              <li>Mở <a href="https://developers.facebook.com/apps/" target="_blank" rel="noopener" style="color:${brandColor};font-weight:700">Meta for Developers → Apps</a> → Tạo App (Consumer / Authenticate).</li>
+              <li>Trong <strong>Facebook Login → Settings</strong>, thêm <strong>Valid OAuth Redirect URI</strong>:<br/>
+                <code style="user-select:all;background:var(--card);padding:2px 6px;border-radius:4px;border:1px solid var(--border)">${esc(originUrl)}</code>
+              </li>
+              <li>Sao chép <strong>App ID</strong> dán vào ô bên dưới (hoặc thêm biến <code>FACEBOOK_APP_ID</code> trên Vercel).</li>
+            </ol>
+          `}
         </div>
+
+        <form class="panda-auth-form" id="form-save-oauth-id" novalidate>
+          <div class="panda-field-group">
+            <label class="panda-field-label" for="inp-oauth-cid">${isGoogle ? 'Dán Google Client ID vào đây để kích hoạt ngay:' : 'Dán Facebook App ID vào đây để kích hoạt ngay:'}</label>
+            <input class="panda-input" type="text" id="inp-oauth-cid" value="${esc(isGoogle ? curIds.googleClientId : curIds.facebookAppId)}" placeholder="${isGoogle ? 'VD: 509128009852-xxxx.apps.googleusercontent.com' : 'VD: 123456789012345'}" spellcheck="false" />
+          </div>
+          <div id="oauth-cid-err" class="panda-auth-error hidden" role="alert"></div>
+          <button type="submit" class="btn btn-primary btn-block" style="background:${brandColor};border-color:${brandColor}">
+            🚀 Lưu &amp; Mở trang Chọn tài khoản ${brandName}
+          </button>
+          <button type="button" class="btn btn-outline btn-block btn-sm" id="btn-social-back">← Quay lại</button>
+        </form>
       `);
 
-      modalAfterClose = restoreCardClass;
-      document.getElementById('btn-social-back').onclick = () => {
-        restoreCardClass();
-        renderAuth(mode);
-      };
-      const scrollList = document.getElementById('gchooser-scroll-list');
-      const downFab = document.getElementById('btn-gchooser-down');
-      if (downFab && scrollList) {
-        downFab.onclick = () => {
-          scrollList.scrollBy({ top: 200, behavior: 'smooth' });
-        };
-      }
-
-      document.querySelectorAll('[data-onetap-email]').forEach((btn) => {
-        btn.onclick = async () => {
-          btn.disabled = true;
-          restoreCardClass();
-          const res = await authSocialSignIn({
-            provider,
-            email: btn.dataset.onetapEmail,
-            displayName: btn.dataset.onetapName,
-            avatar: btn.dataset.onetapAvatar
-          });
-          if (res.ok && res.user) await onAuthSuccess(res.user);
-        };
-      });
-
-      const socForm = document.getElementById('form-social-onetap');
-      const showCustomBtn = document.getElementById('btn-show-custom-social');
-      if (showCustomBtn) {
-        showCustomBtn.onclick = () => {
-          socForm.classList.remove('hidden');
-          document.getElementById('soc-email')?.focus();
-        };
-      }
-      socForm.onsubmit = async (e) => {
+      document.getElementById('btn-social-back').onclick = () => renderAuth(mode);
+      document.getElementById('inp-oauth-cid')?.focus();
+      document.getElementById('form-save-oauth-id').onsubmit = async (e) => {
         e.preventDefault();
-        const errBox = document.getElementById('soc-err');
-        errBox.classList.add('hidden');
-        const emailVal = document.getElementById('soc-email').value.trim();
-        const res = await authSocialSignIn({
-          provider,
-          email: emailVal,
-          displayName: emailVal.split('@')[0]
-        });
-        if (!res.ok) {
-          errBox.textContent = res.error;
-          errBox.classList.remove('hidden');
+        const val = document.getElementById('inp-oauth-cid').value.trim();
+        const errEl = document.getElementById('oauth-cid-err');
+        if (!val) {
+          errEl.textContent = `Vui lòng dán ${isGoogle ? 'Google Client ID' : 'Facebook App ID'}.`;
+          errEl.classList.remove('hidden');
           return;
         }
-        restoreCardClass();
-        if (res.user) await onAuthSuccess(res.user);
+        if (isGoogle) saveLocalOAuthClientIds({ googleClientId: val });
+        else saveLocalOAuthClientIds({ facebookAppId: val });
+        await startRealOAuthRedirect(provider);
       };
     };
 
@@ -1368,7 +1321,8 @@ async function boot() {
     if (!e.target.closest('.dict-search-wrap')) drop.classList.add('hidden');
   });
 
-  const restoredUser = await getRestoredUserSession();
+  const oauthCallbackUser = await consumeOAuthCallbackFromUrl();
+  const restoredUser = oauthCallbackUser || (await getRestoredUserSession());
   if (restoredUser) {
     await store.bindUser(restoredUser);
     updateTopbar();

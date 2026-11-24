@@ -4,6 +4,8 @@ export default function handler(req, res) {
   }
   const supabaseUrl = String(process.env.SUPABASE_URL || '').trim();
   const supabaseAnonKey = String(process.env.SUPABASE_ANON_KEY || '').trim();
+  const googleClientId = String(process.env.GOOGLE_CLIENT_ID || '').trim();
+  const facebookAppId = String(process.env.FACEBOOK_APP_ID || '').trim();
   const missing = [];
   if (!supabaseUrl) missing.push('SUPABASE_URL');
   if (!supabaseAnonKey) missing.push('SUPABASE_ANON_KEY');
@@ -12,6 +14,8 @@ export default function handler(req, res) {
   return res.status(200).json({
     supabaseUrl,
     supabaseAnonKey,
+    googleClientId,
+    facebookAppId,
     missing
   });
 }
