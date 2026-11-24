@@ -187,7 +187,7 @@ function toPublicUserObject(acc) {
 
 export function getSavedSocialProfiles(provider = '') {
   const accounts = Object.values(loadVaultAccounts());
-  return accounts
+  const saved = accounts
     .filter((a) => (provider ? a.provider === provider : Boolean(a.provider)))
     .sort((a, b) => String(b.lastLoginAt || b.createdAt || '').localeCompare(String(a.lastLoginAt || a.createdAt || '')))
     .map((a) => ({
@@ -197,6 +197,45 @@ export function getSavedSocialProfiles(provider = '') {
       avatar: a.avatar || '🐼',
       provider: a.provider
     }));
+
+  if (saved.length > 0) return saved;
+
+  // Danh sách tài khoản 1 chạm mặc định để người dùng bấm chọn vào thẳng ngay lập tức không cần gõ phím
+  if (provider === 'facebook') {
+    return [
+      {
+        username: 'tieu151_fb',
+        displayName: 'Lê Tiêu',
+        email: 'tieu151@facebook.com',
+        avatar: '🐉',
+        provider: 'facebook'
+      },
+      {
+        username: 'hocvien_fb',
+        displayName: 'Học Viên Panda (Facebook)',
+        email: 'hocvien.panda@facebook.com',
+        avatar: '🐼',
+        provider: 'facebook'
+      }
+    ];
+  }
+
+  return [
+    {
+      username: 'tieu151',
+      displayName: 'Lê Tiêu',
+      email: 'tieu151@gmail.com',
+      avatar: '🐼',
+      provider: 'google'
+    },
+    {
+      username: 'hocvien_gg',
+      displayName: 'Học Viên Panda (Google)',
+      email: 'hocvien.panda@gmail.com',
+      avatar: '🐯',
+      provider: 'google'
+    }
+  ];
 }
 
 function sanitizeEmailToUsername(rawInput, provider = 'google') {
