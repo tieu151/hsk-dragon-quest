@@ -921,30 +921,42 @@ export async function authLogout() {
 }
 
 export async function fetchLeaderboard() {
+  const byKey = new Map();
+
   const sb = await getSupabase();
   if (sb) {
     try {
       const { data, error } = await sb.from('leaderboard_scores').select('*').limit(10);
-      if (!error && Array.isArray(data) && data.length > 0) return data;
+      if (!error && Array.isArray(data)) {
+        data.forEach((r) => {
+          const key = String(r.user_id || r.display_name || '').toLowerCase();
+          if (key) byKey.set(key, r);
+        });
+      }
     } catch {}
   }
 
-  // Tổng hợp bảng xếp hạng từ các tài khoản trong Built-in Vault
+  // Tổng hợp bảng xếp hạng từ các tài khoản thật đã đăng ký trong hệ thống
   const accounts = Object.values(loadVaultAccounts());
-  const rows = [];
   for (const acc of accounts) {
     const cached = readLocalJson(`${USER_CACHE_PREFIX}${acc.id}`, null);
     const prof = cached?.profile;
     if (prof?.hideOnLeaderboard) continue;
     const xp = Number(prof?.xp || 0);
-    rows.push({
-      display_name: prof?.name || acc.displayName || acc.username,
-      avatar_url: prof?.avatar || acc.avatar || '🐼',
-      level: Math.floor(xp / 100) + 1,
-      xp
-    });
+    const name = prof?.name || acc.displayName || acc.username;
+    const key = String(acc.username || name).toLowerCase();
+    const prev = byKey.get(key);
+    if (!prev || xp >= Number(prev.xp || 0)) {
+      byKey.set(key, {
+        username: acc.username,
+        display_name: name,
+        avatar_url: prof?.avatar || acc.avatar || '🐼',
+        level: Math.floor(xp / 100) + 1,
+        xp
+      });
+    }
   }
-  return rows.sort((a, b) => b.xp - a.xp).slice(0, 10);
+  return Array.from(byKey.values()).sort((a, b) => Number(b.xp || 0) - Number(a.xp || 0)).slice(0, 10);
 }
 
 export async function exportUserCloudData() {

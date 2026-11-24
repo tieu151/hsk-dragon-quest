@@ -976,19 +976,39 @@ function renderView(tab) {
   }
 
   if (tab === 'home') {
-    const cloudRows = (cloudLeaderboard || []).map((r) => ({
-      name: r.display_name,
-      avatar: r.avatar_url || '🐼',
-      lv: r.level || 1,
-      xp: Number(r.xp || 0),
-      isReal: true
-    }));
-    const demoPlayers = [
-      { name: 'Minh Anh', avatar: '🐯', lv: 24, xp: 2810, isReal: false },
-      { name: 'Thảo Nhi', avatar: '🦊', lv: 17, xp: 2090, isReal: false },
-      { name: 'Hoàng Nam', avatar: '🐰', lv: 15, xp: 1950, isReal: false }
-    ];
-    const leaderboard = [...cloudRows, ...demoPlayers].sort((a, b) => b.xp - a.xp).slice(0, 6);
+    const realMap = new Map();
+    (cloudLeaderboard || []).forEach((r) => {
+      const key = String(r.username || r.display_name || '').toLowerCase();
+      if (!key) return;
+      realMap.set(key, {
+        username: r.username || '',
+        name: r.display_name || r.username || 'Học viên',
+        avatar: r.avatar_url || '🐼',
+        lv: Number(r.level) || Math.floor(Number(r.xp || 0) / 100) + 1,
+        xp: Number(r.xp || 0),
+        isMe: Boolean(
+          store.user &&
+          ((r.username && r.username === store.currentUsername) || r.display_name === p.name)
+        )
+      });
+    });
+
+    if (store.user && !p.hideOnLeaderboard) {
+      const myKey = String(store.currentUsername || p.name || '').toLowerCase();
+      const myXp = Number(p.xp || 0);
+      realMap.set(myKey, {
+        username: store.currentUsername || '',
+        name: p.name || store.currentUsername || 'Học viên',
+        avatar: p.avatar || '🐼',
+        lv: Math.floor(myXp / 100) + 1,
+        xp: myXp,
+        isMe: true
+      });
+    }
+
+    const leaderboard = Array.from(realMap.values())
+      .sort((a, b) => b.xp - a.xp)
+      .slice(0, 10);
 
     main.innerHTML = `
       <div class="page-hero">
@@ -1011,7 +1031,16 @@ function renderView(tab) {
           <div class="card">
             <div class="card-header"><h3 class="card-title">🏆 BẢNG XẾP HẠNG PANDA</h3><span class="badge-pill">HSK 1 – 9</span></div>
             <div class="rank-list">
-              ${leaderboard.map((u, idx) => `<div class="rank-row" style="${u.isReal ? 'border:1px solid var(--primary);' : ''}"><span><strong>#${idx + 1}</strong> ${esc(u.avatar)} ${esc(u.name)} · Lv.${u.lv}</span><span class="rank-badge">${u.xp} XP</span></div>`).join('')}
+              ${
+                leaderboard.length > 0
+                  ? leaderboard
+                      .map(
+                        (u, idx) =>
+                          `<div class="rank-row" style="${u.isMe ? 'border:1.5px solid var(--primary);' : ''}"><span><strong>#${idx + 1}</strong> ${esc(u.avatar)} ${esc(u.name)}${u.isMe ? ' <span style="font-size:0.75rem;color:var(--primary);font-weight:700">(Bạn)</span>' : ''} · Lv.${u.lv}</span><span class="rank-badge">${u.xp} XP</span></div>`
+                      )
+                      .join('')
+                  : `<div style="text-align:center;padding:18px 12px;color:var(--text-muted);font-size:0.86rem">Chưa có học viên nào trên bảng xếp hạng. Hãy đăng nhập và bắt đầu học để ghi danh!</div>`
+              }
             </div>
           </div>
           <div class="card">
